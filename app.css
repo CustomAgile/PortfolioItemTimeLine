@@ -1,3 +1,9 @@
+.today-line {
+  stroke-dasharray: 5,5;
+  stroke:rgb(44, 44, 216);
+  stroke-width: 2;
+}
+
 .tree-arrow {
   fill: grey;
 }

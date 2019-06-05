@@ -6,28 +6,33 @@
         settingsScope: 'project',
         componentCls: 'app',
         config: {
-            tlAfter: 182,  //Half a year approx
-            tlBack: 30, //How many days before today.
+            tlAfter: 120,  //Half a year approx
+            tlBack: 60, //How many days before today.
             defaultSettings: {
                 showTimeLine: true,
                 hideArchived: true,
                 showFilter: true,
                 allowMultiSelect: false,
                 onlyDependencies: false,
-                oneTypeOnly: false,
+                // oneTypeOnly: false,
                 startDate: Ext.Date.subtract(new Date(), Ext.Date.DAY, 30),
                 endDate: Ext.Date.add(new Date(), Ext.Date.DAY, 150),
-                lineSize: 20,
+                lineSize: 40,
                 lowestDependencies: true,
                 cardHover: true
             }
         },
 
-        //"Nobody needs more than 640Kb...... or ten colours....."
         colours: ['#f2f0f7', '#dadaeb', '#bcbddc', '#9e9ac8', '#756bb1', '#54278f'],
 
         getSettingsFields: function () {
             var returned = [
+                {
+                    name: 'includeAncestor',
+                    xtype: 'rallycheckboxfield',
+                    fieldLabel: 'Include ancestor in timeline',
+                    labelAlign: 'top'
+                },
                 {
                     name: 'showTimeLine',
                     xtype: 'rallycheckboxfield',
@@ -64,12 +69,12 @@
                     name: 'lowestDependencies',
                     labelAlign: 'top'
                 },
-                {
-                    xtype: 'rallycheckboxfield',
-                    fieldLabel: 'Show one type only',
-                    name: 'oneTypeOnly',
-                    labelAlign: 'top'
-                },
+                // {
+                //     xtype: 'rallycheckboxfield',
+                //     fieldLabel: 'Show one type only',
+                //     name: 'oneTypeOnly',
+                //     labelAlign: 'top'
+                // },
                 {
                     xtype: 'rallycheckboxfield',
                     fieldLabel: 'Allow card pop-up on hover',
@@ -103,7 +108,7 @@
         MIN_COLUMN_WIDTH: 200,        //Looks silly on less than this
         LOAD_STORE_MAX_RECORDS: 100, //Can blow up the Rally.data.wsapi.filter.Or
         WARN_STORE_MAX_RECORDS: 300, //Can be slow if you fetch too many
-        _rowHeight: 100,               //Leave space for "World view" text
+        _rowHeight: 20,               //Leave space for "World view" text
         STORE_FETCH_FIELD_LIST:
             [
                 'Name',
@@ -156,6 +161,8 @@
                 'PercentDoneByStoryPlanEstimate',
                 'PlannedStartDate',
                 'PlannedEndDate',
+                'ActualStartDate',
+                'ActualEndDate',
                 'State',
                 //Customer specific after here. Delete as appropriate
                 // 'c_ProjectIDOBN',
@@ -164,6 +171,16 @@
             ],
 
         items: [
+            {
+                id: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
+                xtype: 'container',
+                flex: 1,
+                layout: {
+                    type: 'hbox',
+                    align: 'middle',
+                    defaultMargins: '0 10 10 0',
+                }
+            },
             {
                 xtype: 'container',
                 itemId: 'filterBox'
@@ -178,7 +195,7 @@
                     tag: 'svg'
                 },
                 listeners: {
-                    afterrender: function () { gApp = this.up('#rallyApp'); gApp._onElementValid(this); },
+                    afterrender: function () { gApp = this.up('#rallyApp'); /* gApp._onElementValid(this);*/ },
                 },
                 visible: false
             }
@@ -200,11 +217,14 @@
         _nodeTree: null,
 
         //Continuation point after selectors ready/changed
-        _enterMainApp: function () {
-            if (gApp._nodes.length === 0) { return; }  //Timer can fire before we have done anything
-            gApp._rowHeight = gApp.getSetting('lineSize') || 20;
+        _redrawNodeTree: function () {
+            if (gApp._nodes.length === 0) { return; }
+            gApp._rowHeight = gApp.getSetting('lineSize') || 40;
+
             //Get all the nodes and the "Unknown" parent virtual nodes
             var nodetree = gApp._createNodeTree(gApp._nodes);
+            if (!nodetree) { return; }
+
             var svg = d3.select('svg');
             svg.attr('height', gApp._rowHeight * (nodetree.value + (gApp.getSetting('showTimeLine') ? 1 : 0)));
             //Make surface the size available in the viewport (minus the selectors and margins)
@@ -231,7 +251,6 @@
         },
 
         _initialiseScale: function () {
-
             var timebegin = new Date(gApp.getSetting('startDate')) || Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack);
             var timeend = new Date(gApp.getSetting('endDate')) || Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter);
             gApp._setTimeScaler(timebegin, timeend);
@@ -239,9 +258,7 @@
 
         _setTimeScaler: function (timebegin, timeend) {
             gApp.dateScaler = d3.scaleTime()
-                .domain([
-                    timebegin, timeend
-                ])
+                .domain([timebegin, timeend])
                 .range([0, parseInt(d3.select('svg').attr('width')) - (gApp._rowHeight + 10)]);
         },
 
@@ -254,13 +271,20 @@
                 .ticks(((width - gApp._rowHeight) + 2) / 80)
                 .tickSize(height)
                 .tickPadding(gApp.getSetting('showTimeLine') ? (8 - height) : 0);
-            gApp.gX = d3.select('svg').append('g');
+            gApp.gX = svg.append('g');
             gApp.gX.attr('transform', 'translate(' + gApp._rowHeight + ',0)')
                 .attr('id', 'axisBox')
                 .attr('width', width - (gApp._rowHeight + 10))
                 .attr('height', height)
-                .attr("class", 'axis')
+                .attr('class', 'axis')
                 .call(gApp.xAxis);
+            d3.selectAll('.tick line').attr('y1', 20);
+            gApp.gX.append('line')
+                .attr('x1', function () { return gApp.dateScaler(new Date()); })
+                .attr('y1', 20)
+                .attr('x2', function () { return gApp.dateScaler(new Date()); })
+                .attr('y2', function () { return height; })
+                .attr('class', 'today-line');
         },
 
         _setZoomer: function () {
@@ -271,9 +295,8 @@
         },
 
         _zoomed: function () {
-
             var maxDate = new Date("1 Jan 1970");
-            var minDate = new Date("31 Dec 2999");  //I'll be dead by then!
+            var minDate = new Date("31 Dec 2999");
             gApp.gX.call(gApp.xAxis.scale(d3.event.transform.rescaleX(gApp.dateScaler)));
             var data = gApp.gX.selectAll('g');
             data.each(function (d) {
@@ -313,47 +336,6 @@
             gApp._rescaledStart();
         },
 
-        _dragEnd: function (d, idx, arr) {
-            //Now we have finished dragging, set up our initial x again
-            d.data.record.set('PlannedStartDate', d.dragStart);
-            d.data.record.set('PlannedEndDate', d.dragEnd);
-            // Add/update this record in the array of changes
-            _.remove(gApp._changedItems, function (item) {
-                return d.data.record.get('FormattedID') === item.get('FormattedID');
-            });
-            gApp._changedItems.push(d.data.record);
-            if (gApp.down('#saveRecords')) { gApp.down('#saveRecords').enable(); }
-            if (gApp.down('#dropRecords')) { gApp.down('#dropRecords').enable(); }
-            gApp._zoomedStart();
-        },
-
-        _dragStart: function (d, idx, arr) {
-            //Disable popups, hovers and cards?
-            if (d.data.card) {
-                d.data.card.destroy();
-                d.data.card = null;
-            }
-            d.dragInitStart = d3.event.x;
-        },
-
-        _dragged: function (d, idx, arr) {
-            d.dragStart =
-                Ext.Date.add(new Date(d.data.record.get('PlannedStartDate')), Ext.Date.MILLI,
-                    gApp.dateScaler.invert(d3.event.x) - gApp.dateScaler.invert(d.dragInitStart));
-
-            d.dragEnd =
-                Ext.Date.add(new Date(d.data.record.get('PlannedEndDate')), Ext.Date.MILLI,
-                    gApp.dateScaler.invert(d3.event.x) - gApp.dateScaler.invert(d.dragInitStart));
-            var rClass = 'clickable draggable' + ((d.children || d._children) ? ' children' : '');
-            if (gApp._checkSchedule(d, d.dragStart, d.dragEnd)) {
-                rClass += ' data--errors';
-            }
-            arr[idx].setAttribute('class', rClass);
-            arr[idx].setAttribute('transform', gApp._setGroupTranslate(d, d.dragStart, d.dragEnd));
-            //Whilst we drag, we need to keep the ones 'off the end' to the right size
-            arr[idx].getElementsByClassName('dragTarget')[0].setAttribute('width', d.drawnWidth);
-        },
-
         _getSVGHeight: function () {
             return parseInt(d3.select('svg').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0);
         },
@@ -371,30 +353,37 @@
         },
 
         _initGroupTranslate: function (d) {
-            d.startX = new Date(d.data.record.get('PlannedStartDate'));
-            d.endX = new Date(d.data.record.get('PlannedEndDate'));
+            d.plannedStartX = new Date(d.data.record.get('PlannedStartDate'));
+            d.plannedEndX = new Date(d.data.record.get('PlannedEndDate'));
+            d.actualStartX = new Date(d.data.record.get('ActualStartDate'));
+            d.actualEndX = d.data.record.get('ActualEndDate') ? new Date(d.data.record.get('ActualEndDate')) : new Date();
 
-        },
-
-        _setGroupTranslate: function (d, start, end) {
+            var plannedX = gApp.dateScaler(d.plannedStartX);
+            var plannedE = gApp.dateScaler(d.plannedEndX);
+            var actualX = gApp.dateScaler(d.actualStartX);
+            var actualE = gApp.dateScaler(d.actualEndX);
             var svgHeight = gApp._getSVGHeight();
-            var x = gApp.dateScaler(start);
-            var e = gApp.dateScaler(end);
-            d.drawnX = (x < 0 ? 0 : x);
-            d.drawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight));
-            d.drawnWidth = e - d.drawnX;
-            d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
-            var retval = "translate(" + d.drawnX + "," + d.drawnY + ")";
-            return retval;
+
+            d.plannedDrawnX = (plannedX < 0 ? 0 : plannedX);
+            d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight));
+            d.plannedDrawnWidth = plannedE - d.plannedDrawnX;
+            d.plannedDrawnWidth = d.plannedDrawnWidth < 0 ? 0 : d.plannedDrawnWidth;
+            d.plannedTranslate = "translate(" + d.plannedDrawnX + "," + d.plannedDrawnY + ")";
+
+            d.actualDrawnX = (actualX < 0 ? 0 : actualX);
+            d.actualDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight) + gApp._rowHeight / 2);
+            d.actualDrawnWidth = actualE - d.actualDrawnX;
+            d.actualDrawnWidth = d.actualDrawnWidth < 0 ? 0 : d.actualDrawnWidth;
+            d.actualTranslate = "translate(" + d.actualDrawnX + "," + d.actualDrawnY + ")";
         },
 
         _refreshTree: function () {
 
+            var symbolWidth = 20;
             var svgWidth = parseInt(d3.select('svg').attr('width')) - gApp._rowHeight;
-            var nodetree = gApp._nodeTree;
-
             var partition = d3.partition();
 
+            var nodetree = gApp._nodeTree;
             nodetree = partition(nodetree);
             gApp._indexTree(nodetree);
 
@@ -402,58 +391,93 @@
             //We need to ignore this and not draw anything", so we use 'filter' to remove
 
             //Let's scale to the dateline
-            var node = d3.select('#zoomTree').selectAll(".node")
+            var rows = d3.select('#zoomTree').selectAll(".node")
                 .data(nodetree.descendants())
-                .enter().filter(
-                    function (d) {
-                        if (d.id === "root") { return false; }
-                        return true;
-                    }
-                ).append("g")
-                .attr('class', gApp._getGroupClass)
+                .enter().filter(function (d) { return d.id !== "root" || gApp.getSetting('includeAncestor') })
+                .append("g");
+
+            // Create planned groups
+            var plannedRows = rows.append("g").attr('class', gApp._getGroupClass)
                 .attr('id', function (d) { return 'group-' + d.data.Name; })
                 .attr('transform', function (d) {
                     gApp._initGroupTranslate(d);
-                    var gt = gApp._setGroupTranslate(d, d.startX, d.endX);
-                    //Store for later use after we have calculated it
-                    d.iX = d.x;
-                    d.iE = d.e;
-                    return gt;
-                })
-                .call(d3.drag()
-                    .filter(function () { return (d3.event.target.nodeName !== 'text'); })
-                    .on('drag', gApp._dragged)
-                    .on('end', gApp._dragEnd)
-                    .on('start', gApp._dragStart)
-                );
+                    return d.plannedTranslate;
+                });
 
-            var drags = node.append('rect')
-                .attr('rx', gApp._rowHeight / 2)
-                .attr('ry', gApp._rowHeight / 2)
-                .attr('width', function (d) { return d.drawnWidth; })
-                .attr('height', gApp._rowHeight)
+            // Create actuals groups
+            var actualRows = rows.append("g")
+                .attr('id', function (d) { return 'group-' + d.data.Name + '-actual'; })
+                .attr('transform', function (d) {
+                    return d.actualTranslate;
+                });
+
+            // Display colored bars for actuals
+            actualRows
+                .append('rect')
+                // Round bar for completed PIs, square for in-progress
+                .attr('rx', function (d) { return d.data.record.get('ActualEndDate') ? gApp._rowHeight / 8 : 0; })
+                .attr('ry', function (d) { return d.data.record.get('ActualEndDate') ? gApp._rowHeight / 8 : 0; })
+                .attr('y', 3)
+                .attr('width', function (d) { return d.actualDrawnWidth || 1; })
+                .attr('height', gApp._rowHeight / 3.5)
+                .attr('fill', function (d) {
+                    return d.data.record.get('ActualStartDate') ? gApp._getPiHealthColor(d.data.record.data) : '#ffffff';
+                })
+                .attr('opacity', 0.5)
+                .attr('class', 'clickable')
+                .attr('id', function (d) { return 'rect-' + d.data.Name + '-actual'; });
+
+            // Pecent done text
+            actualRows.filter(function (d) { return d.data.record.get('ActualStartDate'); })
+                .append('text')
+                .attr('x', function (d) { return d.actualDrawnWidth / 2; })
+                .attr('y', gApp._rowHeight / 4 + 2)
+                .attr('style', 'font-size:10')
+                .text(function (d) { return d.actualDrawnWidth ? (d.data.record.get('PercentDoneByStoryPlanEstimate') * 100).toFixed(0) + '%' : ''; });
+
+            // Planned date bars
+            plannedRows
+                // .filter(function (d) {
+                //     return d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate');
+                // })
+                .append('rect')
+                .attr('id', function (d) { return 'rect-' + d.data.Name; })
+                .attr('rx', gApp._rowHeight / 4)
+                .attr('ry', gApp._rowHeight / 4)
+                .attr('width', function (d) { return d.plannedDrawnWidth; })
+                .attr('height', gApp._rowHeight / 2)
                 .attr('fill', function (d) { return gApp.colours[d.depth + 1]; })
                 .attr('opacity', 0.5)
-                .attr('class', 'clickable dragTarget')
+                .attr('class', 'clickable')
                 .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
                 .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
+                .on('click', function (d, idx, arr) {
+                    //Browsers get confused over the shift key (think it's 'selectAll')
+                    if (d3.event.altKey) {
+                        gApp._dataPanel(d, idx, arr);
+                    } else {
+                        gApp._setTimeline(d);
+                    }
+                });
 
-                .attr('id', function (d) { return 'rect-' + d.data.Name; })
-                ;
-            //Add clipPath here
-            var cp = node.append('clipPath')
-                .attr('id', function (d) { return 'clipPath-' + d.data.Name; });
-
-            cp.append('rect')
+            // clipPath for PI name text
+            plannedRows
+                .filter(function (d) {
+                    return d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate');
+                })
+                .append('clipPath')
+                .attr('id', function (d) { return 'clipPath-' + d.data.Name; })
+                .append('rect')
                 //Allow a little thing you can hover over, or show the whole text
                 //if the bar is missing completely
-                .attr('width', function (d) { return (d.drawnWidth > 10) ? d.drawnWidth : svgWidth; })
-                .attr('height', gApp._rowHeight)
+                .attr('width', function (d) { return (d.plannedDrawnWidth > 10) ? d.plannedDrawnWidth : svgWidth; })
+                .attr('height', gApp._rowHeight / 2)
                 .attr('class', 'arrowbox');
 
-            node.append('text')
-                .attr('y', gApp._rowHeight / 2)  //Should follow point size of font
-                .attr('x', gApp._rowHeight / 2)
+            // Triple bar symbol (hamburger button)
+            plannedRows.append('text')
+                .attr('y', gApp._rowHeight / 4)
+                .attr('x', gApp._rowHeight / 8)
                 .attr('alignment-baseline', 'central')
                 .text('V')
                 .attr('class', function (d) {
@@ -465,16 +489,19 @@
                 })
                 .on('click', function (d) { gApp._itemMenu(d); });
 
-            node.append('text')
-                .attr('clip-path', function (d) { return 'url(#clipPath-' + d.data.Name + ')'; })
+            // PI ID and Name text
+            plannedRows.append('text')
+                .attr('clip-path', function (d) { return 'url(#clipPath-' + d.data.Name + ')'; }) // TODO CLIPPING IF PLANNED DATES OUT OF SCALE BOUNDS
                 .attr('id', function (d) { return 'text-' + d.data.Name; })
                 //We are going to put a gear menu in the front
-                .attr('x', gApp._rowHeight + 15)
-                .attr('y', gApp._rowHeight / 2)  //Should follow point size of font
+                .attr('x', symbolWidth + 5)
+                .attr('y', gApp._rowHeight / 4)  //Should follow point size of font
                 .attr('class', 'clickable normalText')
                 .attr('editable', 'none')
                 .attr('alignment-baseline', 'central')
-                .attr('style', 'font-size:' + (gApp._rowHeight - 8))
+                .attr('style', 'font-size:12')
+                .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
+                .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
                 .on('click', function (d, idx, arr) {
                     //Browsers get confused over the shift key (think it's 'selectAll')
                     if (d3.event.altKey) {
@@ -485,9 +512,10 @@
                 })
                 .text(function (d) { return d.data.record.get('FormattedID') + ": " + d.data.record.get('Name'); });
 
-            var childrenNode = d3.selectAll('.children').append('text')
-                .attr('x', function (d) { return -(gApp._rowHeight + d.drawnX); })   //Leave space for up/down arrow
-                .attr('y', gApp._rowHeight / 2)
+            // Expand / Collapse arrows
+            d3.selectAll('.children').append('text')
+                .attr('x', function (d) { return -(symbolWidth + d.plannedDrawnX); })
+                .attr('y', gApp._rowHeight / 4)
                 .attr('class', 'icon-gear app-menu')
                 .attr('alignment-baseline', 'central')
                 .text(function (d) { return d.children ? '9' : '8'; })
@@ -510,7 +538,7 @@
                                     //Stuff without end point
                                     var source = d3.select('#rect-' + d.data.Name);
                                     var x0 = source.node().getCTM().e + source.node().getBBox().width - gApp._rowHeight;
-                                    var y0 = source.node().getCTM().f - gApp._rowHeight / 2;
+                                    var y0 = source.node().getCTM().f - gApp._rowHeight / 4;
 
                                     if (!e) {
                                         zClass += 'textBlink';
@@ -541,7 +569,7 @@
                                     //Stuff that needs endpoint
                                     var target = d3.select('#rect-' + e.data.Name);
                                     var x1 = target.node().getCTM().e - gApp._rowHeight;
-                                    var y1 = target.node().getCTM().f - (gApp._rowHeight / 2);
+                                    var y1 = target.node().getCTM().f - (gApp._rowHeight / 4);
 
                                     zoomTree.append('circle')
                                         .attr('cx', x1)
@@ -552,7 +580,7 @@
 
                                     zClass += (zClass.length ? ' ' : '') + 'dashed' + d.data.record.get('PortfolioItemType').Ordinal.toString();
 
-                                    if (gApp.getSetting('oneTypeOnly') ||
+                                    if (//gApp.getSetting('oneTypeOnly') ||
                                         !gApp.getSetting('lowestDependencies') ||
                                         d.data.record.get('PortfolioItemType').Ordinal === 0
                                     ) {
@@ -609,10 +637,9 @@
         },
 
         _getSuccessors: function (record) {
-
             var deferred = Ext.create('Deft.Deferred');
             var config = {
-                fetch: true,
+                fetch: gApp.STORE_FETCH_FIELD_LIST,
                 callback: function (records, operation, success) {
                     if (success) {
                         deferred.resolve(records);
@@ -634,7 +661,6 @@
                 //Only exists on real items, so do something for the 'unknown' item
                 return;
             } else {
-
                 if (!node.data.card) {
                     var card = Ext.create('Rally.ui.cardboard.Card', {
                         'record': node.data.record,
@@ -664,7 +690,7 @@
         },
 
         _nodePopup: function (node, index, array) {
-            var popover = Ext.create('Rally.ui.popover.DependenciesPopover',
+            Ext.create('Rally.ui.popover.DependenciesPopover',
                 {
                     record: node.data.record,
                     target: node.data.card.el
@@ -984,83 +1010,83 @@
             return "";
         },
         //Entry point after creation of render box
-        _onElementValid: function (rs) {
-            gApp.timeboxScope = gApp.getContext().getTimeboxScope();
-            //Add any useful selectors into this container ( which is inserted before the rootSurface )
-            //Choose a point when all are 'ready' to jump off into the rest of the app
-            var hdrBoxConfig = {
-                xtype: 'container',
-                itemId: 'headerBox',
-                layout: 'hbox',
-                items: [
+        // _onElementValid: function (rs) {
+        //     gApp.timeboxScope = gApp.getContext().getTimeboxScope();
+        //     //Add any useful selectors into this container ( which is inserted before the rootSurface )
+        //     //Choose a point when all are 'ready' to jump off into the rest of the app
+        //     var hdrBoxConfig = {
+        //         xtype: 'container',
+        //         itemId: 'headerBox',
+        //         layout: 'hbox',
+        //         items: [
 
-                    {
-                        xtype: 'rallyportfolioitemtypecombobox',
-                        itemId: 'piType',
-                        fieldLabel: 'Choose Portfolio Type :',
-                        labelWidth: 100,
-                        margin: '5 0 5 20',
-                        defaultSelectionPosition: 'first',
-                        listeners: {
-                            select: function () { gApp._kickOff(); },    //Jump off here to add portfolio size selector
-                        }
-                    },
-                ]
-            };
+        //             {
+        //                 xtype: 'rallyportfolioitemtypecombobox',
+        //                 itemId: 'piType',
+        //                 fieldLabel: 'Choose Portfolio Type :',
+        //                 labelWidth: 100,
+        //                 margin: '5 0 5 20',
+        //                 defaultSelectionPosition: 'first',
+        //                 listeners: {
+        //                     select: function () { gApp._kickOff(); },    //Jump off here to add portfolio size selector
+        //                 }
+        //             },
+        //         ]
+        //     };
 
-            var hdrBox = this.insert(0, hdrBoxConfig);
-            var saveButton = hdrBox.add({
-                margin: 10,
-                xtype: 'rallybutton',
-                disabled: true,
-                text: 'Save Changes',
-                id: 'saveRecords',
-                handler: function () {
-                    var changeStore = Ext.create('Rally.data.wsapi.Store', {
-                        model: 'Artifact',
-                        // proxy: {
-                        //     type: 'memory',
-                        //     reader: {
-                        //         type: 'json'
-                        //     }
-                        // }
-                    });
-                    changeStore.add(gApp._changedItems);
-                    _.each(changeStore.getRecords(), function (record) {
-                        record.save();
-                    });
-                    gApp.down('#dropRecords').disable();
-                    this.disable();
-                }
-            });
-            hdrBox.add({
-                margin: 10,
-                xtype: 'rallybutton',
-                text: 'Discard Changes',
-                disabled: true,
-                id: 'dropRecords',
-                handler: function () {
-                    _.each(gApp._changedItems, function (item) {
-                        item.self.load(item.getId(), {
-                            fetch: gApp.STORE_FETCH_FIELD_LIST,
-                        }).then({
-                            success: function (record) {
-                                //Give it back to the node
-                                var d = gApp._findTreeNode(gApp._getNodeTreeRecordId(record));
-                                d.data.record = record;
-                                gApp._zoomedStart();
-                            },
-                            failure: function () {
-                                console.log("Save on buttonclick failed");
-                            }
-                        });
-                    });
-                    gApp._changedItems = [];
-                    this.disable();
-                    saveButton.disable();
-                }
-            });
-        },
+        //     var hdrBox = this.insert(0, hdrBoxConfig);
+        //     // var saveButton = hdrBox.add({
+        //     //     margin: 10,
+        //     //     xtype: 'rallybutton',
+        //     //     disabled: true,
+        //     //     text: 'Save Changes',
+        //     //     id: 'saveRecords',
+        //     //     handler: function () {
+        //     //         var changeStore = Ext.create('Rally.data.wsapi.Store', {
+        //     //             model: 'Artifact',
+        //     //             // proxy: {
+        //     //             //     type: 'memory',
+        //     //             //     reader: {
+        //     //             //         type: 'json'
+        //     //             //     }
+        //     //             // }
+        //     //         });
+        //     //         changeStore.add(gApp._changedItems);
+        //     //         _.each(changeStore.getRecords(), function (record) {
+        //     //             record.save();
+        //     //         });
+        //     //         gApp.down('#dropRecords').disable();
+        //     //         this.disable();
+        //     //     }
+        //     // });
+        //     // hdrBox.add({
+        //     //     margin: 10,
+        //     //     xtype: 'rallybutton',
+        //     //     text: 'Discard Changes',
+        //     //     disabled: true,
+        //     //     id: 'dropRecords',
+        //     //     handler: function () {
+        //     //         _.each(gApp._changedItems, function (item) {
+        //     //             item.self.load(item.getId(), {
+        //     //                 fetch: gApp.STORE_FETCH_FIELD_LIST,
+        //     //             }).then({
+        //     //                 success: function (record) {
+        //     //                     //Give it back to the node
+        //     //                     var d = gApp._findTreeNode(gApp._getNodeTreeRecordId(record));
+        //     //                     d.data.record = record;
+        //     //                     gApp._zoomedStart();
+        //     //                 },
+        //     //                 failure: function () {
+        //     //                     console.log("Save on buttonclick failed");
+        //     //                 }
+        //     //             });
+        //     //         });
+        //     //         gApp._changedItems = [];
+        //     //         this.disable();
+        //     //         saveButton.disable();
+        //     //     }
+        //     // });
+        // },
 
         _nodes: [],
 
@@ -1069,85 +1095,86 @@
             gApp._kickOff();
         },
 
+        onAncestorFilterChange: function () {
+            gApp._refreshTimeline();
+        },
+
         onTimeboxScopeChange: function (newTimebox) {
             this.callParent(arguments);
             gApp.timeboxScope = newTimebox;
-            gApp._clearNodes();
-            gApp._getArtifacts([gApp.down('#itemSelector').getRecord()]);
+            gApp._refreshTimeline();
         },
 
         _onFilterChange: function (inlineFilterButton) {
             gApp.advFilters = inlineFilterButton.getTypesAndFilters().filters;
-            inlineFilterButton._previousTypesAndFilters = inlineFilterButton.getTypesAndFilters();
-            if (gApp._nodes.length) {
-                gApp._clearNodes();
-                gApp._getArtifacts([gApp.down('#itemSelector').getRecord()]);
-            }
+            // inlineFilterButton._previousTypesAndFilters = inlineFilterButton.getTypesAndFilters();
+            gApp._refreshTimeline();
         },
 
         _onFilterReady: function (inlineFilterPanel) {
             gApp.down('#filterBox').add(inlineFilterPanel);
         },
 
-        _kickOff: function () {
-            var ptype = gApp.down('#piType');
-            var hdrBox = gApp.down('#headerBox');
-            gApp._typeStore = ptype.store;
-            if (!gApp.getSetting('oneTypeOnly')) {
-                var selector = gApp.down('#itemSelector');
-                if (selector) {
-                    selector.destroy();
-                }
-                var is = hdrBox.insert(1, {
-                    xtype: 'rallyartifactsearchcombobox',
-                    fieldLabel: 'Choose Start Item :',
-                    itemId: 'itemSelector',
-                    multiSelect: gApp.getSetting('allowMultiSelect'),
-                    labelWidth: 100,
-                    queryMode: 'remote',
-                    allowNoEntry: false,
-                    pageSize: 200,
-                    width: 600,
-                    margin: '10 0 5 20',
-                    stateful: true,
-                    stateId: this.getContext().getScopedStateId('itemSelector'),
-                    storeConfig: {
-                        models: ['portfolioitem/' + ptype.rawValue],
-                        fetch: gApp.STORE_FETCH_FIELD_LIST,
-                        context: gApp.getContext().getDataContext(),
-                        pageSize: 200,
-                        autoLoad: true
-                    },
-                    listeners: {
-                        change: function (selector, records) {
-                            if ((records !== null) && (records.length > 0)) {
-                                gApp._resetTimer(this.startAgain);
-                            }
-                        }
-                    },
-                    startAgain: function () {
-                        var records = gApp.down('#itemSelector').valueModels;
+        _refreshTimeline: function () {
+            // TODO: this is kind of a hack for dealing with multiple 'select' listeners
+            // You should fix this later
+            if (gApp.loadingTimeline) {
+                return;
+            }
+            gApp._removeSVGTree();
+            // Reset height so the loading mask shows properly
+            d3.select('svg').attr('height', 300);
+
+            // Ancestor plugin gives us the ref and typepath, so we need to fetch
+            // the actual record before proceeding
+            var piData = gApp.ancestorFilterPlugin._getValue();
+            if (piData.pi) {
+                gApp.setLoading('Loading porfolio items...');
+                gApp.loadingTimeline = true;
+                gApp._fetchRecordByRef(piData, function (store, records, success) {
+                    if (success) {
                         gApp._clearNodes();
-                        if (records.length > 1) {
-                            gApp._nodes.push({
-                                'Name': 'Combined View',
-                                'record': {
-                                    'data': {
-                                        '_ref': 'root',
-                                        'Name': ''
-                                    }
+                        if (records && records.length) {
+                            gApp.setLoading('Loading porfolio items...');
+                            gApp.loadingTimeline = true;
+                            records[0].data.ObjectID = 'root';
+
+                            new Promise(function (resolve, reject) {
+                                gApp._getArtifactsFromRoot(records, resolve, reject);
+                            }).then(
+                                // RESOLVE
+                                function () {
+                                    gApp._redrawNodeTree();
                                 },
-                                'local': true
+                                // REJECT
+                                function () {
+                                    Rally.ui.notify.Notifier.showError({ message: 'Failed while fetching portfolio items. Please reload and try again.' });
+                                }
+                            ).finally(function () {
+                                gApp.setLoading(false);
+                                gApp.loadingTimeline = false;
                             });
                         }
-                        gApp._getArtifacts(records);
+                        else {
+                            Rally.ui.notify.Notifier.showError({ message: 'Failed to retrieve selected portfolio item. Please reload and try again.' });
+                            gApp.setLoading(false);
+                            gApp.loadingTimeline = false;
+                        }
+                    }
+                    else {
+                        Rally.ui.notify.Notifier.showError({ message: 'Failed to retrieve selected portfolio item. Please reload and try again.' });
+                        gApp.setLoading(false);
+                        gApp.loadingTimeline = false;
                     }
                 });
             }
+        },
 
-            //        Ext.util.Observable.capture( is, function(event) { console.log('event', event, arguments);});
+        _kickOff: function () {
+            gApp._typeStore = gApp.ancestorFilterPlugin.portfolioItemTypes;
+
             if (gApp.getSetting('showFilter') && !gApp.down('#inlineFilter')) {
-                hdrBox.add({
+                gApp.ancestorFilterPlugin.renderArea.add({
                     xtype: 'rallyinlinefiltercontrol',
                     name: 'inlineFilter',
                     itemId: 'inlineFilter',
@@ -1159,7 +1186,7 @@
                         stateId: this.getContext().getScopedStateId('inline-filter'),
                         context: this.getContext(),
                         //                    modelNames: ['PortfolioItem/' + ptype.rawValue], //NOOOO!
-                        modelNames: gApp._getModelFromOrd(0), //We actually want to filter the features... YESSSS!
+                        modelNames: gApp._getModelFromOrd(0), //We actually want to filter the features... YESSSS! // TODO
                         filterChildren: false,
                         inlineFilterPanelConfig: {
                             quickFilterPanelConfig: {
@@ -1174,67 +1201,46 @@
                     }
                 });
             }
-            if (gApp.getSetting('oneTypeOnly')) {
-                //Get the records you can see of the type set in the piType selector
-                //and call _getArtifacts with them.
-                var fetchConfig = gApp._fetchConfig(true);
-                fetchConfig.model = gApp._getSelectedType();
-                fetchConfig.autoLoad = true;
-                fetchConfig.pageSize = 2000;    //Wells Fargo..... Ouch!
-                fetchConfig.listeners = {
-                    load: function (store, records, opts) {
-                        if (records.length > 1) {
-                            gApp._clearNodes();
-                            gApp._nodes.push({
-                                'Name': 'Combined View',
-                                'record': {
-                                    'data': {
-                                        '_ref': 'root',
-                                        'Name': ''
-                                    }
-                                },
-                                'local': true
-                            });
-                            gApp._getArtifacts(records);
-                        }
-                    },
-                    change: function (a, b, c, d, e, f) {
-                        console.log('change: ', arguments);
-                    }
-                };
-                Ext.create('Rally.data.wsapi.Store', fetchConfig);
-            }
+
+            gApp._refreshTimeline();
         },
 
-        _fetchConfig: function (lowest) {
-            var collectionConfig = {
+        _buildConfig: function (type) {
+            var config = {
+                model: type.get('TypePath'),
                 sorters: [
                     {
                         property: 'DragAndDropRank',
                         direction: 'ASC'
                     }
                 ],
+                limit: Infinity,
                 fetch: gApp.STORE_FETCH_FIELD_LIST,
-
-                filters: []
+                filters: [gApp.ancestorFilterPlugin.getFilterForType(type.get('TypePath'))]
             };
             if (gApp.getSetting('hideArchived')) {
-                collectionConfig.filters.push({
+                config.filters.push({
                     property: 'Archived',
                     operator: '=',
                     value: false
                 });
             }
 
-            if (lowest) { //Only for lowest level item type)
+            var dataContext = gApp.getContext().getDataContext();
+            if (gApp.ancestorFilterPlugin.getIgnoreProjectScope()) {
+                dataContext.project = null;
+            }
+            config.context = dataContext;
+
+            if (type.get('Ordinal') < 2) { //Only for lowest level item type)
                 if (gApp.getSetting('showFilter') && gApp.advFilters && gApp.advFilters.length > 0) {
                     Ext.Array.each(gApp.advFilters, function (filter) {
-                        collectionConfig.filters.push(filter);
+                        config.filters.push(filter);
                     });
                 }
 
                 if (gApp.getSetting('onlyDependencies') === true) {
-                    collectionConfig.filters.push(Rally.data.wsapi.Filter.or([
+                    config.filters.push(Rally.data.wsapi.Filter.or([
                         { property: 'Predecessors.ObjectID', operator: '!=', value: null },
                         { property: 'Successors.ObjectID', operator: '!=', value: null }
                     ]));
@@ -1243,42 +1249,85 @@
                 if ((gApp.timeboxScope && gApp.timeboxScope.type.toLowerCase() === 'release') ||
                     (gApp.timeboxScope && gApp.timeboxScope.type.toLowerCase() === 'milestone')
                 ) {
-                    collectionConfig.filters.push(gApp.timeboxScope.getQueryFilter());
+                    config.filters.push(gApp.timeboxScope.getQueryFilter());
                 }
             }
-            return Ext.clone(collectionConfig);
+            return Ext.clone(config);
         },
 
-        _getArtifacts: function (data) {
-            //On re-entry send an event to redraw
-            gApp._nodes = gApp._nodes.concat(gApp._createNodes(data));    //Add what we started with to the node list
+        _getArtifactsFromRoot: function (records, resolve, reject) {
+            if (records.length) {
+                gApp._nodes = gApp._nodes.concat(gApp._createNodes(records));
+                var childType = gApp._findChildType(records[0]);
 
-            this.fireEvent('redrawNodeTree');
-            //Starting with highest selected by the combobox, go down
-
-            if (!gApp.getSetting('oneTypeOnly')) {
-                _.each(data, function (record) {
-                    var lowest = record.get('PortfolioItemType').Ordinal < 2;
-                    if (record.get('Children')) {
-                        //Limit this to feature level and not beyond.
-                        var collectionConfig = gApp._fetchConfig(lowest);
-                        collectionConfig.callback = function (records, operation, success) {
-                            //Start the recursive trawl down through the levels
-                            if (success && records.length) gApp._getArtifacts(records);
-                        };
-                        record.getCollection('Children').load(collectionConfig);
-                    }
-                });
+                if (childType) {
+                    var config = gApp._buildConfig(childType);
+                    Ext.create('Rally.data.wsapi.Store', config).load()
+                        .then({
+                            success: function (results) {
+                                gApp._getArtifactsFromRoot(results, resolve, reject);
+                            },
+                            failure: function () { reject(); },
+                            scope: this
+                        });
+                }
+                else { resolve(); }
             }
+            else { resolve(); }
         },
+
+        // _getArtifactsOld: function (records, resolve, reject) {
+        //     var promises = [];
+        //     // _.each(records, function (record) {
+        //     //     _.each(gApp._nodes, function (node) {
+        //     //         if (node.Name === record.get('FormattedID'))
+        //     //             debugger;
+        //     //     });
+        //     // });
+        //     gApp._nodes = gApp._nodes.concat(gApp._createNodes(records));    //Add what we started with to the node list
+
+        //     //if (!gApp.getSetting('oneTypeOnly')) {
+        //     _.each(records, function (record) {
+        //         if (record.get('Children') && record.get('Children').Count) {
+        //             promises.push(new Promise(function (newResolve, newReject) {
+        //                 var isLowest = record.get('PortfolioItemType').Ordinal < 2;
+        //                 //Limit this to feature level and not beyond.
+        //                 var collectionConfig = gApp._buildConfig(isLowest);
+        //                 //collectionConfig.callback = 
+        //                 record.getCollection('Children', collectionConfig).load({
+        //                     callback: function (records, operation, success) {
+        //                         //Start the recursive trawl down through the levels
+        //                         if (success && records.length) {
+        //                             gApp._getArtifacts(records, newResolve, newReject);
+        //                         } else {
+        //                             newResolve();
+        //                         }
+        //                     },
+        //                     context: gApp.getContext().getDataContext()
+        //                 });
+        //                 // record.getCollection('Children', collectionConfig).load(collectionConfig);
+
+        //             }));
+        //         }
+        //     });
+        //     //}
+        //     Promise.all(promises)
+        //         .then(function () {
+        //             resolve();
+        //         })
+        //         .catch(function (error) {
+        //             // TODO HANDLE THIS  
+        //             console.log('rejecting promise');
+        //             reject();
+        //         });
+        // },
 
         _createNodes: function (data) {
             //These need to be sorted into a hierarchy based on what we have. We are going to add 'other' nodes later
             var nodes = [];
             //Push them into an array we can reconfigure
             _.each(data, function (record) {
-                var localNode = (gApp.getContext().getProjectRef() === record.get('Project')._ref);
-                nodes.push({ 'Name': record.get('FormattedID'), 'record': record, 'local': localNode, 'dependencies': [] });
+                nodes.push({ 'Name': record.get('FormattedID'), 'record': record, 'dependencies': [] });
             });
             return nodes;
         },
@@ -1301,29 +1350,45 @@
         },
 
         _findParentType: function (record) {
-            //The only source of truth for the hierachy of types is the typeStore using 'Ordinal'
             var ord = null;
-            for (var i = 0; i < gApp._typeStore.totalCount; i++) {
-                if (record.data._type === gApp._typeStore.data.items[i].get('TypePath').toLowerCase()) {
-                    ord = gApp._typeStore.data.items[i].get('Ordinal');
+            for (var i = 0; i < gApp._typeStore.length; i++) {
+                if (record.data._type.toLowerCase() === gApp._typeStore[i].get('TypePath').toLowerCase()) {
+                    ord = gApp._typeStore[i].get('Ordinal');
+                    ord++;
                     break;
                 }
             }
-            ord += 1;   //We want the next one up, if beyond the list, set type to root
-            //If we fail this, then this code is wrong!
-            if (i >= gApp._typeStore.totalCount) {
+            if (!ord || ord >= gApp._typeStore.length) {
                 return null;
             }
-            var typeRecord = _.find(gApp._typeStore.data.items, function (type) { return type.get('Ordinal') === ord; });
+            var typeRecord = _.find(gApp._typeStore, function (type) { return type.get('Ordinal') === ord; });
             return (typeRecord && typeRecord.get('TypePath').toLowerCase());
         },
+
+        _findChildType: function (record) {
+            var ord = null;
+            for (var i = 0; i < gApp._typeStore.length; i++) {
+                if (record.data._type.toLowerCase() === gApp._typeStore[i].get('TypePath').toLowerCase()) {
+                    ord = gApp._typeStore[i].get('Ordinal');
+                    ord--;
+                    break;
+                }
+            }
+            if (ord === null || ord < 0) {
+                return null;
+            }
+            var typeRecord = _.find(gApp._typeStore, function (type) { return type.get('Ordinal') === ord; });
+            return typeRecord;
+        },
+
         _findNodeById: function (nodes, id) {
             return _.find(nodes, function (node) {
                 return node.record.data._ref === id;
             });
         },
+
         _findParentNode: function (nodes, child) {
-            if (child.record.data._ref === 'root') return null;
+            if (child.record.data.ObjectID === 'root') return null;
             var parent = child.record.data.Parent;
             var pParent = null;
             if (parent) {
@@ -1344,8 +1409,27 @@
             //If the record is a type at the top level, then we must return something to indicate 'root'
             return pParent ? pParent : gApp._findNodeById(nodes, 'root');
         },
+
+        _fetchRecordByRef: function (type, callback) {
+            var oid = Rally.util.Ref.getOidFromRef(type.pi);
+            Ext.create('Rally.data.wsapi.Store', {
+                model: type.piTypePath,
+                autoLoad: true,
+                pageSize: 1,
+                fetch: gApp.STORE_FETCH_FIELD_LIST,
+                filters: [{
+                    property: 'ObjectID',
+                    operator: '=',
+                    value: oid
+                }],
+                context: { project: null },
+                listeners: { load: callback }
+            });
+        },
+
         //Routines to manipulate the types
 
+        // TODO FIXME
         _getSelectedOrdinal: function () {
             return gApp.down('#piType').lastSelection[0].get('Ordinal');
         },
@@ -1356,28 +1440,28 @@
 
         _getTypeList: function (highestOrdinal) {
             var piModels = [];
-            _.each(gApp._typeStore.data.items, function (type) {
+            _.each(gApp._typeStore, function (type) {
                 //Only push types below that selected
-                if (type.data.Ordinal <= (highestOrdinal ? highestOrdinal : 0))
-                    piModels.push({ 'type': type.data.TypePath.toLowerCase(), 'Name': type.data.Name, 'ref': type.data._ref, 'Ordinal': type.data.Ordinal });
+                if (type.get('Ordinal') <= (highestOrdinal ? highestOrdinal : 0))
+                    piModels.push({ 'type': type.get('TypePath').toLowerCase(), 'Name': type.get('Name'), 'ref': type.get('_ref'), 'Ordinal': type.get('Ordinal') });
             });
             return piModels;
         },
 
         _highestOrdinal: function () {
-            return _.max(gApp._typeStore.data.items, function (type) { return type.get('Ordinal'); }).get('Ordinal');
+            return _.max(gApp._typeStore, function (type) { return type.get('Ordinal'); }).get('Ordinal');
         },
 
         _getModelFromOrd: function (number) {
             var model = null;
-            _.each(gApp._typeStore.data.items, function (type) { if (number == type.get('Ordinal')) { model = type; } });
+            _.each(gApp._typeStore, function (type) { if (number == type.get('Ordinal')) { model = type; } });
             return model && model.get('TypePath');
         },
 
         _getOrdFromModel: function (modelName) {
             var model = null;
-            _.each(gApp._typeStore.data.items, function (type) {
-                if (modelName == type.get('TypePath').toLowerCase()) {
+            _.each(gApp._typeStore, function (type) {
+                if (modelName.toLowerCase() === type.get('TypePath').toLowerCase()) {
                     model = type.get('Ordinal');
                 }
             });
@@ -1407,10 +1491,19 @@
 
         _createNodeTree: function (nodes) {
             //Try to use d3.stratify to create nodet
-            var nodetree = gApp._stratifyNodeTree(nodes);
-            nodetree.sum(function (d) { return 1; });        // Set the dimensions in svg to match
-            gApp._nodeTree = nodetree;      //Save for later
-            return nodetree;
+            try {
+                var nodetree = gApp._stratifyNodeTree(nodes);
+                nodetree.sum(function (d) { return 1; });        // Set the dimensions in svg to match
+                gApp._nodeTree = nodetree;      //Save for later
+                return nodetree;
+            }
+            catch (e) {
+                Rally.ui.notify.Notifier.showError({
+                    message: e.message
+                });
+                console.log(e.stack);
+            }
+            return null;
         },
 
         _findTreeNode: function (id) {
@@ -1453,9 +1546,9 @@
             gApp._removeCards();
         },
 
-        redrawNodeTree: function () {
-            gApp._removeSVGTree();
-            gApp._enterMainApp();
+        _getPiHealthColor: function (record) {
+            var health = Rally.util.HealthColorCalculator.calculateHealthColorForPortfolioItemData(record, 'PercentDoneByStoryPlanEstimate');
+            return health.hex;
         },
 
         _removeCards: function () {
@@ -1468,35 +1561,37 @@
         },
 
         launch: function () {
-
-            this.on('redrawNodeTree', this.redrawNodeTree);
-            this.subscribe(this, Rally.Message.objectUpdate, this._objectUpdated, this);
-        },
-
-        _objectUpdated: function (update) {
-            var d = gApp._findTreeNode(update.data._ref);
-            var node = d3.select('#group-' + d.data.Name);
-            node.remove();
-            //Check if the record was part of the changes we have logged
-            _.remove(gApp._changedItems, function (item) {
-                return (item.get('FormattedID') === d.data.record.get('FormattedID'));
-            });
-            if (gApp._changedItems.length === 0) {
-                gApp.down('#saveRecords').disable();
-                gApp.down('#dropRecords').disable();
-            }
-            update.self.load(update.getId()).then({
-                success: function (record) {
-                    d.data.record = record;
-                    gApp._zoomedStart();
+            this.loadingTimeline = false;
+            Rally.data.wsapi.Proxy.superclass.timeout = 240000;
+            Rally.data.wsapi.batch.Proxy.superclass.timeout = 240000;
+            this.ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
+                ptype: 'UtilsAncestorPiAppFilter',
+                pluginId: 'ancestorFilterPlugin',
+                allowNoEntry: false,
+                defaultFetch: this.STORE_FETCH_FIELD_LIST,
+                settingsConfig: {
+                    labelWidth: 150,
+                    margin: 10
+                },
+                listeners: {
+                    scope: this,
+                    ready: function (plugin) {
+                        plugin.addListener({
+                            scope: this,
+                            select: function () {
+                                this.onAncestorFilterChange();
+                            }
+                        });
+                        this._kickOff();
+                    },
+                    single: true
                 }
             });
+            this.addPlugin(this.ancestorFilterPlugin);
         },
 
         initComponent: function () {
             this.callParent(arguments);
-            this.addEvents('redrawNodeTree');
-        },
-
+        }
     });
 }());

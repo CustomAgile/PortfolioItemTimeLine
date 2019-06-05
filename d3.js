@@ -1,4 +1,5 @@
 // https://d3js.org Version 4.4.1. Copyright 2017 Mike Bostock.
+/* jshint ignore:start */
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
   typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -16391,3 +16392,4 @@ exports.geoTransverseMercatorRaw = transverseMercatorRaw;
 Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
+/* jshint ignore:end */
