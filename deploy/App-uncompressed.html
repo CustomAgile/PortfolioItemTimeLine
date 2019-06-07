@@ -723,6 +723,7 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
         defaultSettings: {
             includeAncestor: true,
             showTimeLine: true,
+            showReleases: true,
             hideArchived: true,
             showFilter: true,
             allowMultiSelect: false,
@@ -750,6 +751,12 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
                 name: 'showTimeLine',
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Show dates at top',
+                labelAlign: 'top'
+            },
+            {
+                name: 'showReleases',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Show Releases at top',
                 labelAlign: 'top'
             },
             {
@@ -940,7 +947,7 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
         if (!nodetree) { return; }
 
         var svg = d3.select('svg');
-        svg.attr('height', gApp._rowHeight * (nodetree.value + (gApp.getSetting('showTimeLine') ? 1 : 0)));
+        svg.attr('height', gApp._rowHeight * (nodetree.value + (gApp.getSetting('showTimeLine') ? 1 : 0) + (gApp.getSetting('showReleases') ? 1 : 0)));
         //Make surface the size available in the viewport (minus the selectors and margins)
         var rs = this.down('#rootSurface');
         rs.getEl().setHeight(svg.attr('height'));
@@ -1051,7 +1058,7 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
     },
 
     _getSVGHeight: function () {
-        return parseInt(d3.select('svg').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0);
+        return parseInt(d3.select('svg').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0); // - (gApp.getSetting('showReleases') ? gApp._rowHeight : 0)
     },
 
     _itemMenu: function (d) {
@@ -1064,6 +1071,21 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
             rClass += ' data--errors';
         }
         return rClass;
+    },
+
+    _initReleaseTranslate: function (d) {
+        d.startX = new Date(d.get('ReleaseStartDate'));
+        d.endX = new Date(d.get('ReleaseDate'));
+
+        var x = gApp.dateScaler(d.startX);
+        var e = gApp.dateScaler(d.endX);
+
+        d.drawnX = x;
+        // d.drawnX = (x < 0 ? 0 : x);
+        d.drawnY = -gApp._rowHeight / 1.5;
+        d.drawnWidth = e - d.drawnX;
+        d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
+        d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
     },
 
     _initGroupTranslate: function (d) {
@@ -1101,8 +1123,36 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
         nodetree = partition(nodetree);
         gApp._indexTree(nodetree);
 
-        //When we come here and the "oneTypeOnly flag is set, we will have a 'root' node with no data
-        //We need to ignore this and not draw anything", so we use 'filter' to remove
+        if (gApp.getSetting('showReleases')) {
+            var releases = d3.select('#zoomTree').selectAll(".releaseNode")
+                .data(gApp.releases)
+                .enter().append("g")
+                .attr('class', 'releaseNode')
+                .attr('id', function (d) { return 'release-' + d.get('Name'); })
+                .attr('transform', function (d) {
+                    gApp._initReleaseTranslate(d);
+                    return d.translate;
+                });
+
+            // Release bars
+            releases.append('rect')
+                .attr('width', function (d) { return d.drawnWidth; })
+                .attr('height', gApp._rowHeight / 2)
+                .attr('fill', '#f2f2f2')
+                .attr('stroke', '#808080')
+                .attr('stroke-opacity', 0.5);
+
+            // Release Name
+            releases.append('text')
+                .attr('x', function (d) { return d.drawnWidth / 2; })
+                .attr('y', gApp._rowHeight / 4 + 3)
+                // .attr('class', 'normalText')
+                //.attr('editable', 'none')
+                // .attr('alignment-baseline', 'central')
+                //.attr('style', 'font-size:12')
+                .text(function (d) { return d.get('Name'); });
+
+        }
 
         //Let's scale to the dateline
         var rows = d3.select('#zoomTree').selectAll(".node")
@@ -1729,8 +1779,7 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
     _nodes: [],
 
     onSettingsUpdate: function () {
-        gApp._clearNodes();
-        gApp._kickOff();
+        gApp._refreshTimeline();
     },
 
     onAncestorFilterChange: function () {
@@ -1784,12 +1833,6 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
             });
 
             gApp.ancestorFilterPlugin.renderArea.add({
-                // xtype: 'panel',
-                // title: 'Filter On',
-                // itemId: 'filterTargetPanel',
-                // // bodyPadding: 5,
-                // width: 'auto',
-                // items: [{
                 xtype: 'radiogroup',
                 itemId: 'filterTarget',
                 fieldLabel: 'Filter on',
@@ -1798,10 +1841,7 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
                 columns: buttons.length,
                 vertical: false,
                 items: buttons,
-                listeners: {
-                    change: gApp._onTargetFilterChange
-                }
-                //}]
+                listeners: { change: gApp._onTargetFilterChange }
             });
         }
     },
@@ -1835,12 +1875,22 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
                         }).then(
                             // RESOLVE
                             function () {
-                                gApp._redrawNodeTree();
+                                if (gApp.getSetting('showReleases')) {
+                                    gApp._getReleases().then(
+                                        function () {
+                                            gApp._redrawNodeTree();
+                                        },
+                                        function () {
+                                            Rally.ui.notify.Notifier.showError({ message: 'Failed to fetch releases' });
+                                        }
+                                    );
+                                }
+                                else { gApp._redrawNodeTree(); }
                             },
                             // REJECT
                             function (error) {
                                 Rally.ui.notify.Notifier.showError({
-                                    message: `Failed while fetching portfolio items. ${gApp._parseError(error, 'Please retry.')}`
+                                    message: `Failed while fetching portfolio items. ${gApp._parseError(error, 'Please reload and try again.')}`
                                 });
                             }
                         ).finally(function () {
@@ -1999,6 +2049,55 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
             else { resolve(); }
         }
         else { resolve(); }
+    },
+
+    _getReleases: function () {
+        return new Promise(function (resolve, reject) {
+            Ext.create('Rally.data.wsapi.Store', {
+                model: 'Project',
+                autoLoad: true,
+                pageSize: 1,
+                fetch: ['ObjectID'],
+                filters: [{
+                    property: 'Parent',
+                    operator: '=',
+                    value: null
+                }],
+                context: { project: null },
+                listeners: {
+                    load: function (store, records, success) {
+                        if (success && records.length) {
+                            Ext.create('Rally.data.wsapi.Store', {
+                                model: 'Release',
+                                autoLoad: true,
+                                limit: Infinity,
+                                fetch: ['Name', 'ReleaseStartDate', 'ReleaseDate'],
+                                filters: [{
+                                    property: 'Project',
+                                    operator: '=',
+                                    value: records[0].get('_ref')
+                                }],
+                                context: {
+                                    project: records[0].get('_ref'),
+                                    projectScopeDown: false,
+                                    projectScopeUp: false
+                                },
+                                listeners: {
+                                    load: function (store, records, success) {
+                                        if (success) {
+                                            gApp.releases = records;
+                                            resolve();
+                                        }
+                                        else { reject(); }
+                                    }
+                                }
+                            });
+                        }
+                        else { reject(); }
+                    }
+                }
+            });
+        });
     },
 
     _createNodes: function (data) {
@@ -2200,7 +2299,7 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
     _addSVGTree: function () {
         var svg = d3.select('svg');
         svg.append("g")
-            .attr("transform", "translate(" + gApp._rowHeight + "," + (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0) + ")")
+            .attr("transform", "translate(" + gApp._rowHeight + "," + ((gApp.getSetting('showTimeLine') ? gApp._rowHeight / 1.5 : 0) + (gApp.getSetting('showReleases') ? gApp._rowHeight / 1.5 : 0)) + ")")
             .attr("id", "zoomTree")
             .attr('width', +svg.attr('width') - gApp._rowHeight)
             .attr('height', +svg.attr('height'))
@@ -2223,7 +2322,6 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
         if (d3.select("#staticTree")) {
             d3.select("#staticTree").remove();
         }
-        //Go through all nodes and kill the cards
         gApp._removeCards();
     },
 
