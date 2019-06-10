@@ -1,7 +1,7 @@
 // (function () {
 //     var Ext = window.Ext4 || window.Ext;
 
-Ext.define('Nik.apps.PortfolioItemTimeline.app', {
+Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     extend: 'Rally.app.TimeboxScopedApp',
     settingsScope: 'project',
     componentCls: 'app',
@@ -122,26 +122,15 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
             'Name',
             'FormattedID',
             'Parent',
-            'DragAndDropRank',
             'Children',
             'ObjectID',
             'Project',
-            'DisplayColor',
             'Owner',
-            'Blocked',
-            'BlockedReason',
-            'Ready',
-            'Tags',
-            'Workspace',
-            'RevisionHistory',
-            'CreationDate',
             'PercentDoneByStoryCount',
             'PercentDoneByStoryPlanEstimate',
             'PredecessorsAndSuccessors',
             'State',
             'PreliminaryEstimate',
-            'Description',
-            'Notes',
             'Predecessors',
             'Successors',
             'OrderIndex',   //Used to get the State field order index
@@ -209,13 +198,6 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
             visible: false
         }
     ],
-
-    timer: null,
-
-    _resetTimer: function (callFunc) {
-        if (gApp.timer) { clearTimeout(gApp.timer); }
-        gApp.timer = setTimeout(callFunc, 2000);    //Debounce user selections to the tune of two seconds
-    },
 
     //Set the SVG area to the surface we have provided
     _setSVGSize: function (surface) {
@@ -1142,7 +1124,10 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
         }
         gApp._removeSVGTree();
         // Reset height so the loading mask shows properly
-        d3.select('svg').attr('height', 300);
+        let svg = d3.select('svg');
+        svg.attr('height', 300);
+        var rs = this.down('#rootSurface');
+        rs.getEl().setHeight(300);
 
         // Ancestor plugin gives us the ref and typepath, so we need to fetch
         // the actual record before proceeding
@@ -1170,6 +1155,7 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
                                         },
                                         function () {
                                             Rally.ui.notify.Notifier.showError({ message: 'Failed to fetch releases' });
+                                            gApp._redrawNodeTree();
                                         }
                                     );
                                 }
@@ -1258,9 +1244,10 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
                     direction: 'ASC'
                 }
             ],
-            limit: Infinity,
+            pageSize: 600,
+            limit: 600,
             fetch: gApp.STORE_FETCH_FIELD_LIST,
-            filters: [gApp.ancestorFilterPlugin.getFilterForType(type.get('TypePath'))]
+            filters: []
         };
         if (gApp.getSetting('hideArchived')) {
             config.filters.push({
@@ -1298,8 +1285,8 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
         }
 
         // Parents have been filtered so we only want children underneath those
-        // parents that were return to avoid breaking the tree
-        if (type.get('Ordinal') === gApp.filterOrdinal - 1) {
+        // parents that were returned to avoid breaking the tree
+        if (type.get('Ordinal') < gApp.filterOrdinal) {
             var parentIds = [];
 
             _.each(parentRecords, function (parent) {
@@ -1311,8 +1298,11 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
                 operator: 'in',
                 value: parentIds
             });
-            parentFilter.toString = function () { return '(Parent.ObjectID in ' + parentIds.join(',') + ')'; };
+            parentFilter.toString = function () { return '(Parent.ObjectID in ,' + parentIds.join(',') + ')'; };
             config.filters.push(parentFilter);
+        }
+        else {
+            config.filters.push(gApp.ancestorFilterPlugin.getFilterForType(type.get('TypePath')));
         }
 
         return Ext.clone(config);
@@ -1325,14 +1315,21 @@ Ext.define('Nik.apps.PortfolioItemTimeline.app', {
 
             if (childType) {
                 var config = gApp._buildConfig(childType, records);
-                Ext.create('Rally.data.wsapi.Store', config).load()
-                    .then({
-                        success: function (results) {
-                            gApp._getArtifactsFromRoot(results, resolve, reject);
-                        },
-                        failure: function (error) { reject(error); },
-                        scope: this
-                    });
+                try {
+                    Ext.create('Rally.data.wsapi.Store', config).load()
+                        .then({
+                            success: function (results) {
+                                gApp._getArtifactsFromRoot(results, resolve, reject);
+                            },
+                            failure: function (error) { reject(error); },
+                            scope: this
+                        });
+                }
+                catch (e) {
+                    Rally.ui.notify.Notifier.showError({ message: 'Failure while loading artifacts. Please reload and try again.' });
+                    gApp.setLoading(false);
+                    gApp.loadingTimeline = false;
+                }
             }
             else { resolve(); }
         }

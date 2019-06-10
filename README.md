@@ -3,12 +3,11 @@ Portfolio Item Tree Time Line
 
 ## Overview
 
-Another take on the Portfolio Timeline page in Rally: a string board for PI planning with drag'n'drop positioning
-![alt text](https://github.com/nikantonelli/PortfolioItemTimeLine/blob/Strings-board/Images/overview.png)
+An enhanced Portfolio Item Timeline with actuals, advanced filtering, broadcasting filter integration and release axis.
 
 Option 1: after selecting a top level item, the app will find all the portfolio items attached to that and then lay them out using the PlannedStartDate and PlannedEndDate. The initial view will be today minus 30days until today plus 180 days, but you can set that in the app settings if you want to override it.
 
-The lowest level portfolio items can be filtered based on the advanced filter settings. This means that you can look at just those items that are in a Release timebox, or just the things that are yours, etc.
+Portfolio items can be filtered based on the advanced filter settings. Radio buttons allow you to choose with portfolio item type is bound to the filters.
 
 Option 2: select a portfolio type and all those of that level found in the current context will be shown. The filters then apply to the level chosen.
 
