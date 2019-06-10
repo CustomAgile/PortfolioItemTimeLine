@@ -17,8 +17,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             allowMultiSelect: false,
             onlyDependencies: false,
             // oneTypeOnly: false,
-            startDate: Ext.Date.subtract(new Date(), Ext.Date.DAY, 30),
-            endDate: Ext.Date.add(new Date(), Ext.Date.DAY, 150),
+            startDate: Ext.Date.subtract(new Date(), Ext.Date.DAY, 90),
+            endDate: Ext.Date.add(new Date(), Ext.Date.DAY, 60),
             lineSize: 40,
             lowestDependencies: true,
             cardHover: true
@@ -121,15 +121,21 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         [
             'Name',
             'FormattedID',
+            'PlannedStartDate',
+            'PlannedEndDate',
+            'ActualStartDate',
+            'ActualEndDate',
             'Parent',
             'Children',
             'ObjectID',
             'Project',
+            'DisplayName',
             'Owner',
             'PercentDoneByStoryCount',
             'PercentDoneByStoryPlanEstimate',
             'PredecessorsAndSuccessors',
             'State',
+            'Value',
             'PreliminaryEstimate',
             'Predecessors',
             'Successors',
@@ -138,7 +144,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             'Ordinal',
             'Release',
             'Iteration',
-            'Milestones',
+            'Milestones'
             //Customer specific after here. Delete as appropriate
             // 'c_ProjectIDOBN',
             // 'c_QRWP',
@@ -160,7 +166,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             'PlannedEndDate',
             'ActualStartDate',
             'ActualEndDate',
-            'State',
+            'State'
             //Customer specific after here. Delete as appropriate
             // 'c_ProjectIDOBN',
             // 'c_QRWP'
@@ -1078,8 +1084,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _refreshTargetFilters: function () {
         var filterTarget = gApp.down('#filterTarget');
+        var filterContainer = gApp.down('#filterTargetContainer');
+
+        if (!filterContainer) { return; }
+
         if (filterTarget) {
-            gApp.ancestorFilterPlugin.renderArea.remove(filterTarget, false);
+            gApp.down('#filterTargetContainer').remove(filterTarget, false);
         }
         var selectedOrd = gApp._getSelectedOrdinal();
         if (!gApp.filterOrdinal || gApp.filterOrdinal > selectedOrd - 1) {
@@ -1102,12 +1112,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 });
             });
 
-            gApp.ancestorFilterPlugin.renderArea.add({
+            filterContainer.add({
                 xtype: 'radiogroup',
                 itemId: 'filterTarget',
                 fieldLabel: 'Filter on',
                 labelStyle: 'font-size: medium',
                 labelWidth: 75,
+                margin: '0 20 0 20',
                 columns: buttons.length,
                 vertical: false,
                 items: buttons,
@@ -1154,7 +1165,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                             gApp._redrawNodeTree();
                                         },
                                         function () {
-                                            Rally.ui.notify.Notifier.showError({ message: 'Failed to fetch releases' });
+                                            gApp._showError('Failed to fetch releases');
                                             gApp._redrawNodeTree();
                                         }
                                     );
@@ -1163,9 +1174,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             },
                             // REJECT
                             function (error) {
-                                Rally.ui.notify.Notifier.showError({
-                                    message: `Failed while fetching portfolio items. ${gApp._parseError(error, 'Please reload and try again.')}`
-                                });
+                                gApp._showError(`Failed while fetching portfolio items. ${gApp._parseError(error, 'Please reload and try again.')}`);
                             }
                         ).finally(function () {
                             gApp.setLoading(false);
@@ -1173,13 +1182,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         });
                     }
                     else {
-                        Rally.ui.notify.Notifier.showError({ message: 'Failed to retrieve selected portfolio item. Please reload and try again.' });
+                        gApp._showError('Failed to retrieve selected portfolio item. Please reload and try again.');
                         gApp.setLoading(false);
                         gApp.loadingTimeline = false;
                     }
                 }
                 else {
-                    Rally.ui.notify.Notifier.showError({ message: 'Failed to retrieve selected portfolio item. Please reload and try again.' });
+                    gApp._showError('Failed to retrieve selected portfolio item. Please reload and try again.');
                     gApp.setLoading(false);
                     gApp.loadingTimeline = false;
                 }
@@ -1202,9 +1211,18 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             gApp.ancestorFilterPlugin.piTypeSelector.on('select', gApp._refreshTargetFilters);
         }
 
+        var controlContainer = gApp.ancestorFilterPlugin.renderArea.add({
+            xtype: 'container',
+            itemId: 'filterExportControls',
+            layout: {
+                type: 'hbox',
+                align: 'stretch'
+            }
+        });
+
         // Load the inline filter if settings specify such
         if (gApp.getSetting('showFilter') && !gApp.down('#inlineFilter')) {
-            gApp.ancestorFilterPlugin.renderArea.add({
+            controlContainer.add({
                 xtype: 'rallyinlinefiltercontrol',
                 name: 'inlineFilter',
                 itemId: 'inlineFilter',
@@ -1231,7 +1249,24 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 }
             });
         }
-        gApp._refreshTargetFilters();
+
+        controlContainer.add({
+            xtype: 'container',
+            itemId: 'filterTargetContainer'
+        });
+
+        if (gApp.ancestorFilterPlugin._getValue().pi) {
+            gApp._refreshTargetFilters();
+        }
+
+        controlContainer.add({
+            xtype: 'rallybutton',
+            iconCls: 'icon-export',
+            height: 22,
+            toolTipText: 'Export Timeline...',
+            handler: gApp._exportTimeline
+        });
+
         gApp._refreshTimeline();
     },
 
@@ -1326,7 +1361,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         });
                 }
                 catch (e) {
-                    Rally.ui.notify.Notifier.showError({ message: 'Failure while loading artifacts. Please reload and try again.' });
+                    gApp._showError('Failure while loading artifacts. Please reload and try again.');
                     gApp.setLoading(false);
                     gApp.loadingTimeline = false;
                 }
@@ -1563,9 +1598,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             return nodetree;
         }
         catch (e) {
-            Rally.ui.notify.Notifier.showError({
-                message: e.message
-            });
+            gApp._showError(e.message);
             console.log(e.stack);
         }
         return null;
@@ -1622,6 +1655,129 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 node.card = null;
             }
         });
+    },
+
+    _exportTimeline: function () {
+        if (!gApp._nodes || !gApp._nodes.length) { return; }
+
+        var columns = [
+            { dataIndex: 'FormattedID', headerText: 'Formatted ID' },
+            { dataIndex: 'Name', headerText: 'Name' },
+            { dataIndex: 'ObjectID', headerText: 'Object ID' },
+            { dataIndex: 'Parent', headerText: 'Parent' },
+            { dataIndex: 'Project', headerText: 'Project' },
+            { dataIndex: 'Owner', headerText: 'Owner' },
+            { dataIndex: 'PlannedStartDate', headerText: 'Planned Start Date' },
+            { dataIndex: 'PlannedEndDate', headerText: 'Planned End Date' },
+            { dataIndex: 'ActualStartDate', headerText: 'Actual Start Date' },
+            { dataIndex: 'ActualEndDate', headerText: 'Actual End Date' },
+            { dataIndex: 'PercentDoneByStoryCount', headerText: '% Done By Story Count' },
+            { dataIndex: 'PercentDoneByStoryPlanEstimate', headerText: '% Done By Story Plan Estimate' },
+            { dataIndex: 'PredecessorsAndSuccessors', headerText: 'Predecessors And Successors' },
+            { dataIndex: 'State', headerText: 'State' },
+            { dataIndex: 'PreliminaryEstimate', headerText: 'Preliminary Estimate' },
+            { dataIndex: 'PortfolioItemType', headerText: 'Portfolio Item Type' },
+            { dataIndex: 'Release', headerText: 'Release' }
+        ];
+        var exportTree = gApp._createNodeTree(gApp._nodes);
+        var csvArray = [];
+
+        var formatUtils = {
+            delimiter: ",",
+            rowDelimiter: "\r\n",
+            re: new RegExp(',|\"|\r|\n', 'g'),
+            reHTML: new RegExp('<\/?[^>]+>', 'g'),
+            reNbsp: new RegExp('&nbsp;', 'ig')
+        };
+
+        var columnHeaders = _.pluck(columns, 'headerText');
+        var dataKeys = _.pluck(columns, 'dataIndex');
+
+        csvArray.push(columnHeaders.join(formatUtils.delimiter));
+        gApp._addLevelToExport(exportTree, csvArray, dataKeys, formatUtils);
+
+        var csvExportString = csvArray.join(formatUtils.rowDelimiter);
+        gApp._downloadCSV(csvExportString);
+    },
+
+    _downloadCSV: function (csv) {
+        var filename, link;
+        if (csv === null) { return; }
+        filename = 'timeline_export.csv';
+        link = document.createElement('a');
+        document.body.appendChild(link);
+        link.style = 'display: none';
+        var blob = new Blob([csv], { type: 'text/csv' });
+        var url = window.URL.createObjectURL(blob);
+        link.href = url;
+        link.download = filename;
+        link.click();
+    },
+
+    _addLevelToExport: function (exportTree, csvArray, dataKeys, formatUtils) {
+        if (exportTree.data && exportTree.data.record) {
+            var nodeData = [];
+            _.each(dataKeys, function (key) {
+                var val = exportTree.data.record.get(key);
+                if (!val) { val = ''; }
+                else {
+                    val = (function (key, val) {
+                        switch (key) {
+                            case 'PlannedStartDate':
+                            case 'ActualStartDate':
+                            case 'PlannedEndDate':
+                            case 'ActualEndDate':
+                                return val.toISOString();
+                            case 'Parent':
+                                return val.FormattedID;
+                            case 'Owner':
+                                return val.DisplayName;
+                            case 'PercentDoneByStoryCount':
+                            case 'PercentDoneByStoryPlanEstimate':
+                                return (val * 100).toFixed(0) + '%';
+                            case 'PortfolioItemType':
+                            case 'Project':
+                            case 'State':
+                            case 'Release':
+                                return val.Name;
+                            case 'PredecessorsAndSuccessors':
+                                return 'Predecessors: ' + val.Predecessors + '\nSuccessors: ' + val.Successors;
+                            case 'PreliminaryEstimate':
+                                return val.Value;
+                            default:
+                                return val;
+                        }
+                    })(key, val);
+                }
+
+                if (formatUtils.reHTML.test(val)) {
+                    val = val.replace('<br>', '\r\n');
+                    val = Ext.util.Format.htmlDecode(val);
+                    val = Ext.util.Format.stripTags(val);
+                }
+                if (formatUtils.reNbsp.test(val)) {
+                    val = val.replace(formatUtils.reNbsp, ' ');
+                }
+
+                if (formatUtils.re.test(val)) {
+                    val = val.replace(/\"/g, '\"\"');
+                    val = Ext.String.format("\"{0}\"", val);
+                }
+
+                nodeData.push(val);
+            });
+            csvArray.push(nodeData.join(formatUtils.delimiter));
+        }
+
+        if (exportTree.children && exportTree.children.length) {
+            _.each(exportTree.children, function (child) {
+                gApp._addLevelToExport(child, csvArray, dataKeys, formatUtils);
+            });
+        }
+    },
+
+    _showError: function (msg) {
+        Rally.ui.notify.Notifier.showError({ message: msg });
     },
 
     _parseError(e, defaultMessage) {
