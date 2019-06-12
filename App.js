@@ -6,21 +6,19 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     settingsScope: 'project',
     componentCls: 'app',
     config: {
-        tlAfter: 120,  //Half a year approx
-        tlBack: 60, //How many days before today.
+        tlAfter: 90,  //Half a year approx
+        tlBack: 120, //How many days before today.
         defaultSettings: {
             includeAncestor: true,
             showTimeLine: true,
             showReleases: true,
             hideArchived: true,
             showFilter: true,
-            allowMultiSelect: false,
-            onlyDependencies: false,
-            // oneTypeOnly: false,
-            startDate: Ext.Date.subtract(new Date(), Ext.Date.DAY, 90),
-            endDate: Ext.Date.add(new Date(), Ext.Date.DAY, 60),
+            //onlyDependencies: false,
+            // startDate: Ext.Date.subtract(new Date(), Ext.Date.DAY, 90),
+            // endDate: Ext.Date.add(new Date(), Ext.Date.DAY, 60),
             lineSize: 40,
-            lowestDependencies: true,
+            //lowestDependencies: true,
             cardHover: true
         }
     },
@@ -54,49 +52,27 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 labelAlign: 'top'
             },
             {
-                name: 'allowMultiSelect',
-                xtype: 'rallycheckboxfield',
-                fieldLabel: 'Enable multiple start items (Note: Page Reload required if you change value)',
-                labelAlign: 'top'
-            },
-            {
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Show Advanced filter',
                 name: 'showFilter',
                 labelAlign: 'top'
             },
-            {
-                xtype: 'rallycheckboxfield',
-                fieldLabel: 'Only items with dependencies',
-                name: 'onlyDependencies',
-                labelAlign: 'top'
-            },
-            {
-                xtype: 'rallycheckboxfield',
-                fieldLabel: 'Only Feature dependencies',
-                name: 'lowestDependencies',
-                labelAlign: 'top'
-            },
             // {
             //     xtype: 'rallycheckboxfield',
-            //     fieldLabel: 'Show one type only',
-            //     name: 'oneTypeOnly',
+            //     fieldLabel: 'Only items with dependencies',
+            //     name: 'onlyDependencies',
+            //     labelAlign: 'top'
+            // },
+            // {
+            //     xtype: 'rallycheckboxfield',
+            //     fieldLabel: 'Only Feature dependencies',
+            //     name: 'lowestDependencies',
             //     labelAlign: 'top'
             // },
             {
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Allow card pop-up on hover',
                 name: 'cardHover',
-                labelAlign: 'top'
-            }, {
-                xtype: 'rallydatefield',
-                fieldLabel: 'Start Date',
-                name: 'startDate',
-                labelAlign: 'top'
-            }, {
-                xtype: 'rallydatefield',
-                fieldLabel: 'End Date',
-                name: 'endDate',
                 labelAlign: 'top'
             },
             {
@@ -181,6 +157,16 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             layout: {
                 type: 'hbox',
                 align: 'middle',
+                defaultMargins: '0 15 10 0',
+            }
+        },
+        {
+            itemId: 'additionalSettingsArea',
+            xtype: 'container',
+            flex: 1,
+            layout: {
+                type: 'hbox',
+                align: 'middle',
                 defaultMargins: '0 10 10 0',
             }
         },
@@ -191,26 +177,23 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         {
             xtype: 'container',
             itemId: 'rootSurface',
+            id: 'rootSurface',
             padding: '5 0 5 0',
             layout: 'auto',
             width: '98%',
             title: 'Loading...',
-            autoEl: {
-                tag: 'svg'
-            },
-            listeners: {
-                afterrender: function () { gApp = this.up('#rallyApp'); /* gApp._onElementValid(this);*/ },
-            },
+            autoEl: { tag: 'svg' },
+            listeners: { afterrender: function () { gApp = this.up('#rallyApp'); }, },
             visible: false
         }
     ],
 
     //Set the SVG area to the surface we have provided
-    _setSVGSize: function (surface) {
-        var svg = d3.select('svg');
-        svg.attr('width', surface.getEl().dom.clientWidth);
-        svg.attr('height', surface.getEl().dom.clientHeight);
-    },
+    // _setSVGSize: function (surface) {
+    //     var svg = d3.select('#rootSurface');
+    //     svg.attr('width', surface.getEl().dom.clientWidth);
+    //     svg.attr('height', surface.getEl().dom.clientHeight);
+    // },
     _nodeTree: null,
 
     //Continuation point after selectors ready/changed
@@ -222,7 +205,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var nodetree = gApp._createNodeTree(gApp._nodes);
         if (!nodetree) { return; }
 
-        var svg = d3.select('svg');
+        var svg = d3.select('#rootSurface');
         svg.attr('height', gApp._rowHeight * (nodetree.value + (gApp.getSetting('showTimeLine') ? 1 : 0) + (gApp.getSetting('showReleases') ? 1 : 0)));
         //Make surface the size available in the viewport (minus the selectors and margins)
         var rs = this.down('#rootSurface');
@@ -248,20 +231,41 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _initialiseScale: function () {
-        var timebegin = new Date(gApp.getSetting('startDate')) || Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack);
-        var timeend = new Date(gApp.getSetting('endDate')) || Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter);
+        var timebegin = new Date(Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack));
+        var timeend = new Date(Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter));
+
+        // If ancestor has planned dates, set axis to them
+        if (gApp._nodes && gApp._nodes.length) {
+            var start = gApp._nodes[0].record.get('PlannedStartDate');
+            var end = gApp._nodes[0].record.get('PlannedEndDate');
+
+            if (start) {
+                timebegin = start;
+                if (!end) {
+                    timeend = Ext.Date.add(timebegin, Ext.Date.DAY, 180);
+                }
+            }
+            if (end) {
+                timeend = end;
+                if (!start) {
+                    timebegin = Ext.Date.subtract(timebegin, Ext.Date.DAY, 180);
+                }
+            }
+        }
+        gApp.down('#axisStartDate').setValue(timebegin);
+        gApp.down('#axisEndDate').setValue(timeend);
         gApp._setTimeScaler(timebegin, timeend);
     },
 
     _setTimeScaler: function (timebegin, timeend) {
         gApp.dateScaler = d3.scaleTime()
             .domain([timebegin, timeend])
-            .range([0, parseInt(d3.select('svg').attr('width')) - (gApp._rowHeight + 10)]);
+            .range([0, parseInt(d3.select('#rootSurface').attr('width')) - (gApp._rowHeight + 10)]);
     },
 
     _setAxis: function () {
         if (gApp.gX) { gApp.gX.remove(); }
-        var svg = d3.select('svg');
+        var svg = d3.select('#rootSurface');
         var width = +svg.attr('width');
         var height = +svg.attr('height');
         gApp.xAxis = d3.axisBottom(gApp.dateScaler)
@@ -284,37 +288,82 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('class', 'today-line');
     },
 
-    _setZoomer: function () {
-        var svg = d3.select('svg');
-        gApp.zoom = d3.zoom()
-            .on("zoom", gApp._zoomed);
-        svg.call(gApp.zoom);
-    },
+    // _setZoomer: function () {
+    //     var svg = d3.select('#rootSurface');
+    //     gApp.zoom = d3.zoom()
+    //         .on("zoom", gApp._zoomed);
+    //     svg.call(gApp.zoom);
+    // },
 
-    _zoomed: function () {
-        var maxDate = new Date("1 Jan 1970");
-        var minDate = new Date("31 Dec 2999");
-        gApp.gX.call(gApp.xAxis.scale(d3.event.transform.rescaleX(gApp.dateScaler)));
-        var data = gApp.gX.selectAll('g');
-        data.each(function (d) {
-            if (d > maxDate) { maxDate = d; }
-            if (d < minDate) { minDate = d; }
-        });
-        gApp._setTimeScaler(minDate, maxDate);
-        gApp._zoomedStart();
-    },
+    // _zoomed: function () {
+    //     var maxDate = new Date("1 Jan 1970");
+    //     var minDate = new Date("31 Dec 2999");
+    //     gApp.gX.call(gApp.xAxis.scale(d3.event.transform.rescaleX(gApp.dateScaler)));
+    //     var data = gApp.gX.selectAll('g');
+    //     data.each(function (d) {
+    //         if (d > maxDate) { maxDate = d; }
+    //         if (d < minDate) { minDate = d; }
+    //     });
+    //     gApp._setTimeScaler(minDate, maxDate);
+    //     gApp._zoomedStart();
+    // },
 
     _zoomedStart: function () {
+        gApp.down('#zoomInBtn').setDisabled(Rally.util.DateTime.getDifference(gApp.down('#axisEndDate').getValue(), gApp.down('#axisStartDate').getValue(), 'day') < 30);
         gApp._removeSVGTree();
         gApp._addSVGTree();
         gApp._refreshTree();
     },
+
     _rescaledStart: function () {
         gApp._setAxis();
         gApp._zoomedStart();
     },
+
     _startTreeAgain: function () {
         gApp._initialiseScale();
+        gApp._rescaledStart();
+    },
+
+    _zoomIn: function (btn) {
+        var axisStart = gApp.down('#axisStartDate');
+        var startDate = axisStart.getValue();
+        startDate = Ext.Date.add(startDate, Ext.Date.DAY, 14);
+
+        var axisEnd = gApp.down('#axisEndDate');
+        var endDate = axisEnd.getValue();
+        endDate = Ext.Date.subtract(endDate, Ext.Date.DAY, 14);
+
+        if (startDate < endDate) {
+            if (Rally.util.DateTime.getDifference(endDate, startDate, 'day') < 30) {
+                btn.setDisabled(true);
+            }
+
+            axisStart.setValue(startDate);
+            axisEnd.setValue(endDate);
+
+            gApp._setTimeScaler(startDate, endDate);
+            gApp._rescaledStart();
+        }
+    },
+
+    _zoomOut: function () {
+        var axisStart = gApp.down('#axisStartDate');
+        var startDate = axisStart.getValue();
+        startDate = Ext.Date.subtract(startDate, Ext.Date.DAY, 14);
+
+        var axisEnd = gApp.down('#axisEndDate');
+        var endDate = axisEnd.getValue();
+        endDate = Ext.Date.add(endDate, Ext.Date.DAY, 14);
+
+        if (Rally.util.DateTime.getDifference(endDate, startDate, 'day') > 30) {
+            gApp.down('#zoomInBtn').setDisabled(false);
+        }
+
+        axisStart.setValue(startDate);
+        axisEnd.setValue(endDate);
+
+        gApp._setTimeScaler(startDate, endDate);
         gApp._rescaledStart();
     },
 
@@ -334,7 +383,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _getSVGHeight: function () {
-        return parseInt(d3.select('svg').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0); // - (gApp.getSetting('showReleases') ? gApp._rowHeight : 0)
+        return parseInt(d3.select('#rootSurface').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0); // - (gApp.getSetting('showReleases') ? gApp._rowHeight : 0)
     },
 
     _itemMenu: function (d) {
@@ -376,7 +425,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var actualE = gApp.dateScaler(d.actualEndX);
         var svgHeight = gApp._getSVGHeight();
 
-        d.plannedDrawnX = (plannedX < 0 ? 0 : plannedX);
+        d.plannedDrawnX = plannedX;//(plannedX < 0 ? 0 : plannedX);
         d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - (gApp.getSetting('includeAncestor') ? 0 : gApp._rowHeight);
         d.plannedDrawnWidth = plannedE - d.plannedDrawnX;
         d.plannedDrawnWidth = d.plannedDrawnWidth < 0 ? 0 : d.plannedDrawnWidth;
@@ -392,14 +441,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _refreshTree: function () {
 
         var symbolWidth = 20;
-        var svgWidth = parseInt(d3.select('svg').attr('width')) - gApp._rowHeight;
         var partition = d3.partition();
 
         var nodetree = gApp._nodeTree;
         nodetree = partition(nodetree);
         gApp._indexTree(nodetree);
 
-        if (gApp.getSetting('showReleases')) {
+        if (gApp.getSetting('showReleases') && gApp.releases) {
             var releases = d3.select('#zoomTree').selectAll(".releaseNode")
                 .data(gApp.releases)
                 .enter().append("g")
@@ -422,10 +470,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             releases.append('text')
                 .attr('x', function (d) { return d.drawnWidth / 2; })
                 .attr('y', gApp._rowHeight / 4 + 3)
-                // .attr('class', 'normalText')
-                //.attr('editable', 'none')
-                // .attr('alignment-baseline', 'central')
-                //.attr('style', 'font-size:12')
                 .text(function (d) { return d.get('Name'); });
 
         }
@@ -453,6 +497,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         // Display colored bars for actuals
         actualRows
+            .filter(function (d) {
+                return d.data.record.get('ActualStartDate');
+            })
             .append('rect')
             // Round bar for completed PIs, square for in-progress
             .attr('rx', function (d) { return d.data.record.get('ActualEndDate') ? gApp._rowHeight / 8 : 0; })
@@ -477,9 +524,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         // Planned date bars
         plannedRows
-            // .filter(function (d) {
-            //     return d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate');
-            // })
+            .filter(function (d) {
+                return d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate');
+            })
             .append('rect')
             .attr('id', function (d) { return 'rect-' + d.data.Name; })
             .attr('rx', gApp._rowHeight / 4)
@@ -487,7 +534,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('width', function (d) { return d.plannedDrawnWidth; })
             .attr('height', gApp._rowHeight / 2)
             .attr('fill', function (d) { return gApp.colours[d.depth + 1]; })
-            .attr('opacity', function (d) { return (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) ? 0.5 : 0.0; })
+            .attr('opacity', 0.5)
+            //.attr('opacity', function (d) { return (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) ? 0.5 : 0.0; })
             .attr('class', 'clickable')
             .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
             .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
@@ -500,24 +548,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 }
             });
 
-        // clipPath for PI name text
-        plannedRows
-            .filter(function (d) {
-                return d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate');
-            })
-            .append('clipPath')
-            .attr('id', function (d) { return 'clipPath-' + d.data.Name; })
-            .append('rect')
-            //Allow a little thing you can hover over, or show the whole text
-            //if the bar is missing completely
-            .attr('width', function (d) { return (d.plannedDrawnWidth > 10) ? d.plannedDrawnWidth : svgWidth; })
-            .attr('height', gApp._rowHeight / 2)
-            .attr('class', 'arrowbox');
-
         // Triple bar symbol (hamburger button)
         plannedRows.append('text')
             .attr('y', gApp._rowHeight / 4)
-            .attr('x', gApp._rowHeight / 8)
+            .attr('x', function (d) { return 5 - d.plannedDrawnX; })
             .attr('alignment-baseline', 'central')
             .text('V')
             .attr('class', function (d) {
@@ -529,12 +563,14 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             })
             .on('click', function (d) { gApp._itemMenu(d); });
 
+        // hamburgers.append('span')
+        //     .attr('class', 'tooltiptext')
+        //     .text(function (d) { return 'Edit ' + d.data.record.get('FormattedID'); });
+
         // PI ID and Name text
         plannedRows.append('text')
-            .attr('clip-path', function (d) { return 'url(#clipPath-' + d.data.Name + ')'; }) // TODO CLIPPING IF PLANNED DATES OUT OF SCALE BOUNDS
             .attr('id', function (d) { return 'text-' + d.data.Name; })
-            //We are going to put a gear menu in the front
-            .attr('x', symbolWidth + 5)
+            .attr('x', function (d) { return symbolWidth + 5 - d.plannedDrawnX; })
             .attr('y', gApp._rowHeight / 4)  //Should follow point size of font
             .attr('class', 'clickable normalText')
             .attr('editable', 'none')
@@ -561,83 +597,81 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .text(function (d) { return d.children ? '9' : '8'; })
             .on('click', function (d, idx, arr) { gApp._switchChildren(d, idx, arr); });
 
+        if (gApp.down('#showDependenciesCheckbox').getValue()) {
+            nodetree.each(function (d) {
+                //Now add the dependencies lines
+                if (!d.data.record.data.ObjectID) { return; }
+                var deps = d.data.record.get('Successors');
+                if (deps && deps.Count) {
+                    gApp._getSuccessors(d.data.record).then(
+                        {
+                            success: function (succs) {
+                                //Draw a circle on the end of the first one and make it flash if I can't find the end one
+                                _.each(succs, function (succ) {
+                                    var e = gApp._findTreeNode(gApp._getNodeTreeRecordId(succ));
+                                    var zClass = '';
+                                    var zoomTree = d3.select('#zoomTree');
+                                    //Stuff without end point // TODO source.node is sometimes null
+                                    var source = d3.select('#rect-' + d.data.Name);
+                                    var x0 = source.node().getCTM().e + source.node().getBBox().width - gApp._rowHeight;
+                                    var y0 = source.node().getCTM().f - gApp._rowHeight / 4;
 
-        nodetree.each(function (d) {
-            //Now add the dependencies lines
-            if (!d.data.record.data.ObjectID) { return; }
-            var deps = d.data.record.get('Successors');
-            if (deps && deps.Count) {
-                gApp._getSuccessors(d.data.record).then(
-                    {
-                        success: function (succs) {
-                            //Draw a circle on the end of the first one and make it flash if I can't find the end one
-                            _.each(succs, function (succ) {
-                                var e = gApp._findTreeNode(gApp._getNodeTreeRecordId(succ));
-                                var zClass = '';
-                                var zoomTree = d3.select('#zoomTree');
-                                //Stuff without end point
-                                var source = d3.select('#rect-' + d.data.Name);
-                                var x0 = source.node().getCTM().e + source.node().getBBox().width - gApp._rowHeight;
-                                var y0 = source.node().getCTM().f - gApp._rowHeight / 4;
-
-                                if (!e) {
-                                    zClass += 'textBlink';
-                                } else {
-                                    if (gApp._sequenceError(d, e)) {
-                                        zClass += (zClass.length ? ' ' : '') + 'data--errors';
+                                    if (!e) {
+                                        zClass += 'textBlink';
+                                    } else {
+                                        if (gApp._sequenceError(d, e)) {
+                                            zClass += (zClass.length ? ' ' : '') + 'data--errors';
+                                        }
+                                        else {
+                                            zClass += (zClass.length ? ' ' : '') + 'no--errors';
+                                        }
                                     }
-                                    else {
-                                        zClass += (zClass.length ? ' ' : '') + 'no--errors';
-                                    }
-                                }
 
-                                if (zoomTree.select('#circle-' + d.data.Name).empty()) {
+                                    if (zoomTree.select('#circle-' + d.data.Name).empty()) {
+                                        zoomTree.append('circle')
+                                            .attr('cx', x0)
+                                            .attr('cy', y0)
+                                            .attr('r', 3)
+                                            .attr('id', 'circle-' + d.data.Name)
+                                            .on('mouseover', function (a, idx, arr) {    //'a' refers to the wrong thing!
+                                                gApp._createDepsPopover(d, arr[idx], 1);
+                                            })    //Default to successors
+                                            .attr('class', zClass);
+                                    }
+
+                                    if (!e) {
+                                        return;
+                                    }
+                                    //Stuff that needs endpoint
+                                    var target = d3.select('#rect-' + e.data.Name);
+                                    var x1 = target.node().getCTM().e - gApp._rowHeight;
+                                    var y1 = target.node().getCTM().f - (gApp._rowHeight / 4);
+
                                     zoomTree.append('circle')
-                                        .attr('cx', x0)
-                                        .attr('cy', y0)
+                                        .attr('cx', x1)
+                                        .attr('cy', y1)
                                         .attr('r', 3)
-                                        .attr('id', 'circle-' + d.data.Name)
-                                        .on('mouseover', function (a, idx, arr) {    //'a' refers to the wrong thing!
-                                            gApp._createDepsPopover(d, arr[idx], 1);
-                                        })    //Default to successors
+                                        .on('mouseover', function (a, idx, arr) { gApp._createDepsPopover(e, arr[idx], 0); })    //Default to successors
                                         .attr('class', zClass);
-                                }
 
-                                if (!e) {
-                                    return;
-                                }
-                                //Stuff that needs endpoint
-                                var target = d3.select('#rect-' + e.data.Name);
-                                var x1 = target.node().getCTM().e - gApp._rowHeight;
-                                var y1 = target.node().getCTM().f - (gApp._rowHeight / 4);
+                                    zClass += (zClass.length ? ' ' : '') + 'dashed' + d.data.record.get('PortfolioItemType').Ordinal.toString();
 
-                                zoomTree.append('circle')
-                                    .attr('cx', x1)
-                                    .attr('cy', y1)
-                                    .attr('r', 3)
-                                    .on('mouseover', function (a, idx, arr) { gApp._createDepsPopover(e, arr[idx], 0); })    //Default to successors
-                                    .attr('class', zClass);
-
-                                zClass += (zClass.length ? ' ' : '') + 'dashed' + d.data.record.get('PortfolioItemType').Ordinal.toString();
-
-                                if (//gApp.getSetting('oneTypeOnly') ||
-                                    !gApp.getSetting('lowestDependencies') ||
-                                    d.data.record.get('PortfolioItemType').Ordinal === 0
-                                ) {
-                                    zoomTree.append('path')
-                                        .attr('d',
-                                            'M' + x0 + ',' + y0 +
-                                            'C' + (x0 + 150) + ',' + (y0 + (y1 - y0) / 8) +
-                                            ' ' + (x1 - 150) + ',' + (y1 - (y1 - y0) / 8) +
-                                            ' ' + x1 + ',' + y1)
-                                        .attr('class', zClass);
-                                }
-                            });
+                                    if (d.data.record.get('PortfolioItemType').Ordinal === 0) {
+                                        zoomTree.append('path')
+                                            .attr('d',
+                                                'M' + x0 + ',' + y0 +
+                                                'C' + (x0 + 150) + ',' + (y0 + (y1 - y0) / 8) +
+                                                ' ' + (x1 - 150) + ',' + (y1 - (y1 - y0) / 8) +
+                                                ' ' + x1 + ',' + y1)
+                                            .attr('class', zClass);
+                                    }
+                                });
+                            }
                         }
-                    }
-                );
-            }
-        });
+                    );
+                }
+            });
+        }
     },
 
     _createDepsPopover: function (node, circ, tabOverride) {
@@ -1070,16 +1104,46 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _onFilterChange: function (inlineFilterButton) {
         gApp.advFilters = inlineFilterButton.getTypesAndFilters().filters;
+        gApp.down('#applyFiltersBtn').setDisabled(false);
+    },
+
+    _onTargetFilterChange: function (field, newValue) {
+        gApp.filterOrdinal = newValue.targetRadio;
         gApp._refreshTimeline();
     },
 
-    _onTargetFilterChange: function (field, newValue, oldValue, eOpts) {
-        gApp.filterOrdinal = newValue.targetRadio;
+    _applyFilters: function (btn) {
+        btn.setDisabled(true);
         gApp._refreshTimeline();
     },
 
     _onFilterReady: function (inlineFilterPanel) {
         gApp.down('#filterBox').add(inlineFilterPanel);
+
+        gApp.down('rallyquickfilterpanel').add({
+            xtype: 'rallybutton',
+            itemId: 'applyFiltersBtn',
+            handler: gApp._applyFilters,
+            text: 'Apply filters to timeline',
+            cls: 'apply-filters-button',
+            disabled: true
+        });
+    },
+
+    _onAxisDateChange: function () {
+        var axisStart = gApp.down('#axisStartDate');
+        var startDate = axisStart.getValue();
+
+        var axisEnd = gApp.down('#axisEndDate');
+        var endDate = axisEnd.getValue();
+
+        if (endDate < startDate) {
+            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
+            return;
+        }
+
+        gApp._setTimeScaler(startDate, endDate);
+        gApp._rescaledStart();
     },
 
     _refreshTargetFilters: function () {
@@ -1116,7 +1180,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 xtype: 'radiogroup',
                 itemId: 'filterTarget',
                 fieldLabel: 'Filter on',
-                labelStyle: 'font-size: medium',
+                labelSeparator: '',
+                labelStyle: 'font-size: 14px',
                 labelWidth: 75,
                 margin: '0 20 0 20',
                 columns: buttons.length,
@@ -1135,8 +1200,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
         gApp._removeSVGTree();
         // Reset height so the loading mask shows properly
-        let svg = d3.select('svg');
-        svg.attr('height', 300);
+        // let svg = d3.select('#rootSurface');
+        // svg.attr('height', 300);
         var rs = this.down('#rootSurface');
         rs.getEl().setHeight(300);
 
@@ -1144,13 +1209,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         // the actual record before proceeding
         var piData = gApp.ancestorFilterPlugin._getValue();
         if (piData.pi) {
-            gApp.setLoading('Loading porfolio items...');
+            gApp.setLoading('Loading portfolio items...');
             gApp.loadingTimeline = true;
             gApp._fetchRecordByRef(piData, function (store, records, success) {
                 if (success) {
                     gApp._clearNodes();
                     if (records && records.length) {
-                        gApp.setLoading('Loading porfolio items...');
                         gApp.loadingTimeline = true;
                         records[0].id = 'root';
 
@@ -1159,7 +1223,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         }).then(
                             // RESOLVE
                             function () {
-                                if (gApp.getSetting('showReleases')) {
+                                if (gApp.getSetting('showReleases') && !gApp.releases) {
                                     gApp._getReleases().then(
                                         function () {
                                             gApp._redrawNodeTree();
@@ -1220,6 +1284,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
         });
 
+        controlContainer.add({
+            xtype: 'container',
+            itemId: 'filterTargetContainer'
+        });
+
         // Load the inline filter if settings specify such
         if (gApp.getSetting('showFilter') && !gApp.down('#inlineFilter')) {
             controlContainer.add({
@@ -1250,22 +1319,87 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
         }
 
-        controlContainer.add({
-            xtype: 'container',
-            itemId: 'filterTargetContainer'
-        });
+        var fontStyle = 'font-size: 14px';
+        var additionalSettingsArea = gApp.down('#additionalSettingsArea');
+        additionalSettingsArea.add([
+            {
+                xtype: 'rallydatefield',
+                fieldLabel: 'Axis Start',
+                labelSeparator: '',
+                value: new Date(),
+                itemId: 'axisStartDate',
+                labelStyle: fontStyle,
+                labelWidth: 70,
+                margin: '0 15 0 0',
+                validateOnChange: true,
+                listeners: { aftervalidate: gApp._onAxisDateChange }
+            },
+            {
+                xtype: 'rallydatefield',
+                fieldLabel: 'Axis End',
+                labelSeparator: '',
+                value: new Date(),
+                itemId: 'axisEndDate',
+                labelStyle: fontStyle,
+                labelWidth: 70,
+                margin: '0 15 0 0',
+                validateOnChange: true,
+                listeners: { aftervalidate: gApp._onAxisDateChange }
+            },
+            {
+                xtype: 'text',
+                text: 'Zoom',
+                style: fontStyle,
+                width: 40,
+                margin: 0,
+                itemId: 'zoomLabel'
+            },
+            {
+                xtype: 'rallybutton',
+                itemId: 'zoomOutBtn',
+                margin: '0 5 0 0',
+                iconCls: 'icon-collapse',
+                handler: gApp._zoomOut
+            },
+            {
+                xtype: 'rallybutton',
+                itemId: 'zoomInBtn',
+                iconCls: 'icon-expand',
+                handler: gApp._zoomIn,
+                margin: '0 15 0 0',
+            },
+            {
+                xtype: 'rallycheckboxfield',
+                itemId: 'showDependenciesCheckbox',
+                fieldLabel: 'Dependency Strings',
+                labelStyle: 'font-size: 12px',
+                labelWidth: 80,
+                labelSeparator: '',
+                name: 'showDependencies',
+                value: false,
+                handler: gApp._rescaledStart,
+                margin: '0 15 0 0'
+            },
+            {
+                xtype: 'text',
+                text: 'Export',
+                style: fontStyle,
+                width: 50,
+                margin: 0,
+                itemId: 'exportLabel'
+            },
+            {
+                xtype: 'rallybutton',
+                iconCls: 'icon-export',
+                height: 22,
+                toolTipText: 'Export Timeline...',
+                handler: gApp._exportTimeline
+            }
+        ]);
 
         if (gApp.ancestorFilterPlugin._getValue().pi) {
             gApp._refreshTargetFilters();
         }
-
-        controlContainer.add({
-            xtype: 'rallybutton',
-            iconCls: 'icon-export',
-            height: 22,
-            toolTipText: 'Export Timeline...',
-            handler: gApp._exportTimeline
-        });
 
         gApp._refreshTimeline();
     },
@@ -1293,10 +1427,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
 
         var dataContext = gApp.getContext().getDataContext();
-        if (gApp.ancestorFilterPlugin.getIgnoreProjectScope()) {
-            dataContext.project = null;
-        }
-        config.context = dataContext;
 
         if (type.get('Ordinal') === gApp.filterOrdinal) {
             if (gApp.getSetting('showFilter') && gApp.advFilters && gApp.advFilters.length > 0) {
@@ -1305,18 +1435,25 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 });
             }
 
-            if (gApp.getSetting('onlyDependencies') === true) {
-                config.filters.push(Rally.data.wsapi.Filter.or([
-                    { property: 'Predecessors.ObjectID', operator: '!=', value: null },
-                    { property: 'Successors.ObjectID', operator: '!=', value: null }
-                ]));
-            }
+            // if (gApp.getSetting('onlyDependencies') === true) {
+            //     config.filters.push(Rally.data.wsapi.Filter.or([
+            //         { property: 'Predecessors.ObjectID', operator: '!=', value: null },
+            //         { property: 'Successors.ObjectID', operator: '!=', value: null }
+            //     ]));
+            // }
             // Can only do releases and milestones, not iterations
             if ((gApp.timeboxScope && gApp.timeboxScope.type.toLowerCase() === 'release') ||
                 (gApp.timeboxScope && gApp.timeboxScope.type.toLowerCase() === 'milestone')
             ) {
                 config.filters.push(gApp.timeboxScope.getQueryFilter());
             }
+
+            if (gApp.ancestorFilterPlugin.getIgnoreProjectScope()) {
+                dataContext.project = null;
+            }
+        }
+        else {
+            dataContext.project = null;
         }
 
         // Parents have been filtered so we only want children underneath those
@@ -1339,6 +1476,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         else {
             config.filters.push(gApp.ancestorFilterPlugin.getFilterForType(type.get('TypePath')));
         }
+
+        config.context = dataContext;
 
         return Ext.clone(config);
     },
@@ -1371,47 +1510,53 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         else { resolve(); }
     },
 
-    _getReleases: function () {
+    _getReleases: async function () {
+        var projectID = gApp.getContext().getProject().ObjectID;
+        var project;
+
+        // Walk up the project hierarchy to get top-most project to which user has access
+        do {
+            var store = Ext.create('Rally.data.wsapi.Store', {
+                model: 'Project',
+                autoLoad: false,
+                pageSize: 1,
+                fetch: ['ObjectID', 'Parent'],
+                filters: [{
+                    property: 'ObjectID',
+                    operator: '=',
+                    value: projectID
+                }],
+                context: { project: null }
+            });
+            project = await store.load();
+
+            if (project && project.length && project[0].get('Parent')) {
+                projectID = project[0].get('Parent').ObjectID;
+            }
+        }
+        while (project && project.length && project[0].get('Parent'));
+
         return new Promise(function (resolve, reject) {
             Ext.create('Rally.data.wsapi.Store', {
-                model: 'Project',
+                model: 'Release',
                 autoLoad: true,
-                pageSize: 1,
-                fetch: ['ObjectID'],
+                limit: Infinity,
+                fetch: ['Name', 'ReleaseStartDate', 'ReleaseDate'],
                 filters: [{
-                    property: 'Parent',
+                    property: 'Project.ObjectID',
                     operator: '=',
-                    value: null
+                    value: projectID
                 }],
-                context: { project: null },
+                context: {
+                    project: null,
+                    projectScopeDown: false,
+                    projectScopeUp: false
+                },
                 listeners: {
                     load: function (store, records, success) {
-                        if (success && records.length) {
-                            Ext.create('Rally.data.wsapi.Store', {
-                                model: 'Release',
-                                autoLoad: true,
-                                limit: Infinity,
-                                fetch: ['Name', 'ReleaseStartDate', 'ReleaseDate'],
-                                filters: [{
-                                    property: 'Project',
-                                    operator: '=',
-                                    value: records[0].get('_ref')
-                                }],
-                                context: {
-                                    project: records[0].get('_ref'),
-                                    projectScopeDown: false,
-                                    projectScopeUp: false
-                                },
-                                listeners: {
-                                    load: function (store, records, success) {
-                                        if (success) {
-                                            gApp.releases = records;
-                                            resolve();
-                                        }
-                                        else { reject(); }
-                                    }
-                                }
-                            });
+                        if (success) {
+                            gApp.releases = records;
+                            resolve();
                         }
                         else { reject(); }
                     }
@@ -1590,7 +1735,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _createNodeTree: function (nodes) {
-        //Try to use d3.stratify to create nodet
         try {
             var nodetree = gApp._stratifyNodeTree(nodes);
             nodetree.sum(function (d) { return 1; });        // Set the dimensions in svg to match
@@ -1615,7 +1759,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _addSVGTree: function () {
-        var svg = d3.select('svg');
+        var svg = d3.select('#rootSurface');
         svg.append("g")
             .attr("transform", "translate(" + gApp._rowHeight + "," + ((gApp.getSetting('showTimeLine') ? gApp._rowHeight / 1.5 : 0) + (gApp.getSetting('showReleases') ? gApp._rowHeight / 1.5 : 0)) + ")")
             .attr("id", "zoomTree")
@@ -1802,6 +1946,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             pluginId: 'ancestorFilterPlugin',
             allowNoEntry: false,
             defaultFetch: this.STORE_FETCH_FIELD_LIST,
+            labelStyle: 'font-size: 14px',
             settingsConfig: {
                 labelWidth: 150,
                 padding: 10

@@ -316,3 +316,19 @@ circle.no--errors {
   stroke-opacity: 0.3;
   shape-rendering: crispEdges;
 }
+
+#Utils.AncestorPiAppFilter.piType-labelEl,
+#ignoreScopeControl-labelEl {
+  margin-top: 0;
+}
+
+.inline-filter-panel .apply-filters-button {
+  position: absolute;
+  right: 150px;
+  top: 12px;
+  background-color: #75c63f;
+}
+
+.inline-filter-panel>.x-panel-body .quick-filter-panel {
+  padding-right: 270px;
+}
