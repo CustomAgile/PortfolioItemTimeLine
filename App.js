@@ -1511,30 +1511,51 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _getReleases: async function () {
+        var defaultProjectID = 167513414724;
         var projectID = gApp.getContext().getProject().ObjectID;
         var project;
 
-        // Walk up the project hierarchy to get top-most project to which user has access
-        do {
-            var store = Ext.create('Rally.data.wsapi.Store', {
-                model: 'Project',
-                autoLoad: false,
-                pageSize: 1,
-                fetch: ['ObjectID', 'Parent'],
-                filters: [{
-                    property: 'ObjectID',
-                    operator: '=',
-                    value: projectID
-                }],
-                context: { project: null }
-            });
-            project = await store.load();
+        var store = Ext.create('Rally.data.wsapi.Store', {
+            model: 'Project',
+            autoLoad: false,
+            pageSize: 1,
+            fetch: ['ObjectID'],
+            filters: [{
+                property: 'ObjectID',
+                operator: '=',
+                value: defaultProjectID
+            }],
+            context: { project: null }
+        });
+        project = await store.load();
 
-            if (project && project.length && project[0].get('Parent')) {
-                projectID = project[0].get('Parent').ObjectID;
-            }
+        if (project && project.length) {
+            projectID = defaultProjectID;
         }
-        while (project && project.length && project[0].get('Parent'));
+        else {
+            // User doesn't have access to default project
+            // Walk up the project hierarchy to get top-most project to which user has access
+            do {
+                store = Ext.create('Rally.data.wsapi.Store', {
+                    model: 'Project',
+                    autoLoad: false,
+                    pageSize: 1,
+                    fetch: ['ObjectID', 'Parent'],
+                    filters: [{
+                        property: 'ObjectID',
+                        operator: '=',
+                        value: projectID
+                    }],
+                    context: { project: null }
+                });
+                project = await store.load();
+
+                if (project && project.length && project[0].get('Parent')) {
+                    projectID = project[0].get('Parent').ObjectID;
+                }
+            }
+            while (project && project.length && project[0].get('Parent'));
+        }
 
         return new Promise(function (resolve, reject) {
             Ext.create('Rally.data.wsapi.Store', {
@@ -1555,6 +1576,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 listeners: {
                     load: function (store, records, success) {
                         if (success) {
+                            if (!records.length) {
+                                Rally.ui.notify.Notifier.showError({ message: 'Failed to find any releases' });
+                            }
                             gApp.releases = records;
                             resolve();
                         }
