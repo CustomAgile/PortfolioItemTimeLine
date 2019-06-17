@@ -329,6 +329,16 @@ circle.no--errors {
   background-color: #75c63f;
 }
 
+.inline-filter-panel .filter-target-combo {
+  position: absolute;
+  right: 320px;
+  top: 12px;
+}
+
 .inline-filter-panel>.x-panel-body .quick-filter-panel {
-  padding-right: 270px;
+  padding-right: 550px;
+}
+
+#zoomInBtn, #zoomOutBtn {
+  padding: 0;
 }
