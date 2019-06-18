@@ -342,3 +342,17 @@ circle.no--errors {
 #zoomInBtn, #zoomOutBtn {
   padding: 0;
 }
+
+.collapse-icon {
+  font-size: 13px;
+}
+
+text.expand-arrow {
+  fill: rgb(117, 117, 117);
+}
+
+text.collapse-arrow {
+  fill: transparent;
+  stroke-width: 1;
+  stroke: black;
+}

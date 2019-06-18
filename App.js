@@ -188,12 +188,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
     ],
 
-    //Set the SVG area to the surface we have provided
-    // _setSVGSize: function (surface) {
-    //     var svg = d3.select('#rootSurface');
-    //     svg.attr('width', surface.getEl().dom.clientWidth);
-    //     svg.attr('height', surface.getEl().dom.clientHeight);
-    // },
     _nodeTree: null,
 
     //Continuation point after selectors ready/changed
@@ -215,8 +209,22 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp._startTreeAgain();
     },
 
+    _cascadeNewValue: function (parent, value) {
+        if (parent && parent.id !== 'root') {
+            parent.value -= value;
+            gApp._cascadeNewValue(parent.parent, value);
+        }
+    },
+
     _switchChildren: function (d) {
-        d.children ? gApp._collapse(d) : gApp._expand(d);
+        if (d.children) {
+            //gApp._collapseChildren(d.children);
+            gApp._collapse(d);
+            //gApp._cascadeNewValue(d.parent, d._value);
+        } else {
+            // gApp._expandChildren(d._children);
+            gApp._expand(d);
+        }
         gApp._zoomedStart();
     },
 
@@ -239,15 +247,46 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _collapseAll: function () {
-        d3.selectAll('.collapse-icon').dispatch('collapseAll');
+        if (gApp.expandables) {
+            gApp.expandables.each(function (d) { gApp._collapse(d); });
+        } else {
+            d3.selectAll('.collapse-icon').dispatch('collapseAll');
+        }
         gApp._zoomedStart();
+    },
+
+    _collapseChildren: function (d) {
+        if (d && d.length) {
+            _.each(d, function (c) {
+                gApp._collapseChildren(c._children);
+                gApp._collapse(c);
+            });
+        }
+    },
+
+    _expandChildren: function (d) {
+        if (d && d.length) {
+            _.each(d, function (c) {
+                gApp._expandChildren(c._children);
+                gApp._expand(c);
+            });
+        }
     },
 
     _expandAll: function () {
         gApp.setLoading(true);
-        for (let i = 0; i < 4; i++) {
-            d3.selectAll('.collapse-icon').dispatch('expandAll');
+        if (gApp.expandables) {
+            gApp.expandables.each(function (d) {
+                gApp._expandChildren(d._children);
+                gApp._expand(d);
+
+            });
             gApp._zoomedStart();
+        } else {
+            for (let i = 0; i < gApp._getSelectedAncestorTypeOrdinal(); i++) {
+                d3.selectAll('.collapse-icon').dispatch('expandAll');
+                gApp._zoomedStart();
+            }
         }
         gApp.setLoading(false);
     },
@@ -310,26 +349,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('class', 'today-line');
     },
 
-    // _setZoomer: function () {
-    //     var svg = d3.select('#rootSurface');
-    //     gApp.zoom = d3.zoom()
-    //         .on("zoom", gApp._zoomed);
-    //     svg.call(gApp.zoom);
-    // },
-
-    // _zoomed: function () {
-    //     var maxDate = new Date("1 Jan 1970");
-    //     var minDate = new Date("31 Dec 2999");
-    //     gApp.gX.call(gApp.xAxis.scale(d3.event.transform.rescaleX(gApp.dateScaler)));
-    //     var data = gApp.gX.selectAll('g');
-    //     data.each(function (d) {
-    //         if (d > maxDate) { maxDate = d; }
-    //         if (d < minDate) { minDate = d; }
-    //     });
-    //     gApp._setTimeScaler(minDate, maxDate);
-    //     gApp._zoomedStart();
-    // },
-
     _zoomedStart: function () {
         gApp.down('#zoomInBtn').setDisabled(Rally.util.DateTime.getDifference(gApp.down('#axisEndDate').getValue(), gApp.down('#axisStartDate').getValue(), 'day') < 30);
         gApp._removeSVGTree();
@@ -347,46 +366,33 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp._rescaledStart();
     },
 
-    _zoomIn: function (btn) {
+    _zoom: function (zoomIn) {
         var axisStart = gApp.down('#axisStartDate');
         var startDate = axisStart.getValue();
-        startDate = Ext.Date.add(startDate, Ext.Date.DAY, 14);
-
         var axisEnd = gApp.down('#axisEndDate');
         var endDate = axisEnd.getValue();
-        endDate = Ext.Date.subtract(endDate, Ext.Date.DAY, 14);
+        var zoomDays = 14;
 
-        if (startDate < endDate) {
-            if (Rally.util.DateTime.getDifference(endDate, startDate, 'day') < 30) {
-                btn.setDisabled(true);
+        if (zoomIn) {
+            startDate = Ext.Date.add(startDate, Ext.Date.DAY, zoomDays);
+            endDate = Ext.Date.subtract(endDate, Ext.Date.DAY, zoomDays);
+        }
+        else {
+            startDate = Ext.Date.subtract(startDate, Ext.Date.DAY, zoomDays);
+            endDate = Ext.Date.add(endDate, Ext.Date.DAY, zoomDays);
+        }
+
+        if (startDate < endDate || !zoomIn) {
+            if (Rally.util.DateTime.getDifference(endDate, startDate, 'day') < (zoomDays * 2)) {
+                gApp.down('#zoomInBtn').setDisabled(false);
             }
 
             axisStart.setValue(startDate);
             axisEnd.setValue(endDate);
 
-            gApp._setTimeScaler(startDate, endDate);
+            //gApp._setTimeScaler(startDate, endDate);
             gApp._rescaledStart();
         }
-    },
-
-    _zoomOut: function () {
-        var axisStart = gApp.down('#axisStartDate');
-        var startDate = axisStart.getValue();
-        startDate = Ext.Date.subtract(startDate, Ext.Date.DAY, 14);
-
-        var axisEnd = gApp.down('#axisEndDate');
-        var endDate = axisEnd.getValue();
-        endDate = Ext.Date.add(endDate, Ext.Date.DAY, 14);
-
-        if (Rally.util.DateTime.getDifference(endDate, startDate, 'day') > 30) {
-            gApp.down('#zoomInBtn').setDisabled(false);
-        }
-
-        axisStart.setValue(startDate);
-        axisEnd.setValue(endDate);
-
-        gApp._setTimeScaler(startDate, endDate);
-        gApp._rescaledStart();
     },
 
     _indexTree: function (nodetree) {
@@ -476,11 +482,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .append('text')
             .attr('x', -20)
             .attr('y', -40)
-            .attr('class', 'icon-gear app-menu')
+            .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
             .attr('alignment-baseline', 'central')
-            .text(function (d) { return d.expanded ? '8' : '9'; })
+            .text(function (d) { return d.expanded ? '9' : '7'; })
             .on('click', function (d) {
-                d.expanded ? gApp._collapseAll() : gApp._expandAll();
+                if (d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
                 d.expanded = !d.expanded;
             });
 
@@ -588,14 +594,14 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         // Triple bar symbol (hamburger button)
         plannedRows.append('text')
             .attr('y', gApp._rowHeight / 4)
-            .attr('x', function (d) { return 5 - d.plannedDrawnX; })
+            .attr('x', function (d) { return 5 - d.plannedDrawnX + (d.depth * 5); })
             .attr('alignment-baseline', 'central')
             .text('V')
             .attr('class', function (d) {
                 var lClass = 'icon-gear app-menu';
-                if (!d.data.record.get('PlannedStartDate') || !d.data.record.get('PlannedEndDate')) {
-                    lClass += ' error';
-                }
+                // if (!d.data.record.get('PlannedStartDate') || !d.data.record.get('PlannedEndDate')) {
+                //     lClass += ' error';
+                // }
                 return lClass;
             })
             .on('click', function (d) { gApp._itemMenu(d); });
@@ -607,7 +613,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         // PI ID and Name text
         plannedRows.append('text')
             .attr('id', function (d) { return 'text-' + d.data.Name; })
-            .attr('x', function (d) { return symbolWidth + 5 - d.plannedDrawnX; })
+            .attr('x', function (d) { return symbolWidth + 5 - d.plannedDrawnX + (d.depth * 5); })
             .attr('y', gApp._rowHeight / 4)  //Should follow point size of font
             .attr('class', 'clickable normalText')
             .attr('editable', 'none')
@@ -626,12 +632,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .text(function (d) { return d.data.record.get('FormattedID') + ": " + d.data.record.get('Name'); });
 
         // Expand / Collapse arrows
-        d3.selectAll('.children').append('text')
-            .attr('x', function (d) { return -(symbolWidth + d.plannedDrawnX); })
+        gApp.expandables = d3.selectAll('.children').append('text')
+            .attr('x', function (d) { return -(symbolWidth + d.plannedDrawnX) + (d.depth * 5); })
             .attr('y', gApp._rowHeight / 4)
-            .attr('class', 'icon-gear app-menu collapse-icon')
+            .attr('class', function (d) { return 'icon-gear app-menu collapse-icon ' + (d.children ? 'collapse-arrow' : 'expand-arrow'); })
             .attr('alignment-baseline', 'central')
-            .text(function (d) { return d.children ? '9' : '8'; })
+            .text(function (d) { return d.children ? '9' : '7'; })
             .on('click', function (d, idx, arr) { gApp._switchChildren(d, idx, arr); })
             .on('collapseAll', function (d) { gApp._collapse(d); })
             .on('expandAll', function (d) { gApp._expand(d); });
@@ -1178,8 +1184,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             disabled: true
         });
 
-        // Dropdown for specifying which PI type the filters apply to
-        var combo = gApp.down('rallyquickfilterpanel').add({
+        // Dropdown for specifying which PI type the filters and scoping apply to
+        gApp.down('rallyquickfilterpanel').add({
             xtype: 'rallyportfolioitemtypecombobox',
             fieldLabel: 'Filter and project scoping apply to',
             labelSeparator: '',
@@ -1211,123 +1217,104 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
 
         gApp._setTimeScaler(startDate, endDate);
-        gApp._rescaledStart();
+        // gApp._rescaledStart();
     },
 
-    _refreshTargetFilters: function () {
-
-    },
-
-    _refreshTimeline: function () {
+    _refreshTimeline: async function () {
         // TODO: this is kind of a hack for dealing with multiple 'select' listeners
         // You should fix this later
-        if (gApp.loadingTimeline) {
-            return;
-        }
+        if (gApp.loadingTimeline) { return; }
 
         if (gApp.ancestorFilterPlugin.piSelector) {
             gApp.ancestorFilterPlugin.piSelector.queryDelay = 1250;
         }
 
+        var scopeSelector = gApp.down('#ignoreScopeControl');
+
         gApp._removeSVGTree();
         gApp._clearNodes();
+
         // Reset height so the loading mask shows properly
         var rs = gApp.down('#rootSurface');
         rs.getEl().setHeight(300);
 
-        var onError = function (msg) {
-            gApp._showError(msg);
-            gApp.setLoading(false);
-            gApp.loadingTimeline = false;
-        };
-
         gApp.setLoading('Loading portfolio items...');
         gApp.loadingTimeline = true;
 
-        // Ancestor plugin gives us the ref and typepath, so we need to fetch
-        // the actual record before proceeding
-        var piData = gApp.ancestorFilterPlugin._getValue();
-        if (piData.pi) {
-            gApp._fetchRecordByRef(piData, function (store, records, success) {
-                if (success) {
-                    if (records && records.length) {
-                        gApp.loadingTimeline = true;
-                        records[0].id = 'root';
-
-                        new Promise(function (resolve, reject) {
-                            gApp._getArtifactsFromRoot(records, resolve, reject);
-                        }).then(
-                            // RESOLVE
-                            function () {
-                                if (gApp.getSetting('showReleases') && !gApp.releases) {
-                                    gApp._getReleases().then(
-                                        function () { },
-                                        function () { gApp._showError('Failed to fetch releases'); }
-                                    ).finally(function () {
-                                        gApp._redrawNodeTree();
-                                    });
-                                }
-                                else {
-                                    gApp._redrawNodeTree();
-                                }
-                            },
-                            // REJECT
-                            function (error) {
-                                gApp._showError(`Failed while fetching portfolio items. ${gApp._parseError(error, 'Please reload and try again.')}`);
-                            }
-                        ).finally(function () {
-                            gApp.expandData.expanded = true;
-                            gApp.setLoading(false);
-                            gApp.loadingTimeline = false;
-                        });
-                    }
-                    else {
-                        onError('Failed to retrieve selected portfolio item. Please reload and try again.');
-                    }
-                }
-                else {
-                    onError('Failed to retrieve selected portfolio item. Please reload and try again.');
-                }
-            });
+        if (gApp.getSetting('showReleases') && !gApp.releases) {
+            try { await gApp._getReleases(); }
+            catch (e) { gApp._showError('Failed to fetch releases'); }
         }
-        // No ancestor selected, load all PIs starting at selected type
-        else {
-            var topType = gApp._getSelectedAncestorType();
-            if (topType) {
-                new Promise(function (resolve, reject) {
-                    gApp._getArtifacts(topType, resolve, reject);
-                }).then(
-                    // RESOLVE
-                    function () {
-                        if (gApp.getSetting('showReleases') && !gApp.releases) {
-                            gApp._getReleases().then(
-                                function () { },
-                                function () {
-                                    gApp._showError('Failed to fetch releases');
-                                }
-                            ).finally(function () {
-                                gApp._redrawNodeTree();
-                            });
-                        }
-                        else {
-                            gApp._redrawNodeTree();
-                        }
-                    },
-                    // REJECT
-                    function (error) {
-                        gApp._showError(`Failed while fetching portfolio items. ${gApp._parseError(error, 'Please reload and try again.')}`);
+
+        new Promise(function (resolve, reject) {
+            if (gApp._isAncestorSelected()) {
+                // Allow setting project scoping for a single ancestor
+                if (scopeSelector) {
+                    if (scopeSelector.getStore().getItems().length !== 2) {
+                        scopeSelector.getStore().loadData([{
+                            text: "Current Project(s)",
+                            value: false
+                        }, {
+                            text: "Any Project",
+                            value: true
+                        }], false);
                     }
-                ).finally(function () {
-                    gApp.expandData.collapsed = true;
-                    gApp.setLoading(false);
-                    gApp.loadingTimeline = false;
+                }
+
+                // Ancestor plugin gives us the ref and typepath, so we need to fetch
+                // the actual record before proceeding
+                var piData = gApp.ancestorFilterPlugin._getValue();
+                gApp._fetchRecordByRef(piData, function (store, records, success) {
+                    if (success) {
+                        if (records && records.length) {
+                            gApp.loadingTimeline = true;
+                            records[0].id = 'root';
+                            gApp.expandData[0].expanded = true;
+                            gApp._getArtifactsFromRoot(records, resolve, reject);
+                        }
+                        else { reject('Failed to retrieve selected portfolio item. Please reload and try again.'); }
+                    }
+                    else { reject('Failed to retrieve selected portfolio item. Please reload and try again.'); }
                 });
             }
-        }
+            // No ancestor selected, load all PIs starting at selected type
+            else {
+                // For multiple ancestors only allow scoping to current project(s)
+                if (scopeSelector) {
+                    if (scopeSelector.getStore().getItems().length !== 1) {
+                        scopeSelector.getStore().loadData([{
+                            text: "Current Project(s)",
+                            value: false
+                        }], false);
+                    }
+                }
+
+                var topType = gApp._getSelectedAncestorType();
+                if (topType) {
+                    gApp.expandData[0].expanded = false;
+                    gApp._getArtifacts(topType, resolve, reject);
+                }
+                else { reject("Failed while fetching portfolio items. Couldn't load ancestor type."); }
+            }
+        }).then(
+            // RESOLVE
+            function () {
+                gApp._removeChildlessNodes();
+                gApp._redrawNodeTree();
+            },
+            // REJECT
+            function (error) {
+                gApp._showError(gApp._parseError(error, 'Failed while fetching portfolio items. Please reload and try again.'));
+            }
+        ).finally(function () {
+            if (!gApp._isAncestorSelected()) { gApp._collapseAll(); }
+            gApp.setLoading(false);
+            gApp.loadingTimeline = false;
+        });
     },
 
     _kickOff: function () {
-        gApp.expandData = [{ expanded: false }];
+        gApp.expandData = [{ expanded: true }];
         gApp._typeStore = gApp.ancestorFilterPlugin.portfolioItemTypes;
 
         var childTypes = gApp._getTypeList(gApp._highestOrdinal() - 1);
@@ -1337,6 +1324,25 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (gApp.ancestorFilterPlugin.piTypeSelector) {
             gApp.ancestorFilterPlugin.piTypeSelector.on('select', gApp._refreshTimeline);
         }
+
+        var scopeSelector = gApp.down('#ignoreScopeControl');
+
+        if (scopeSelector) {
+            scopeSelector.setForceSelection(true);
+            if (!gApp.ancestorFilterPlugin._getValue().pi) {
+                scopeSelector.getStore().loadData([{
+                    text: "Current Project(s)",
+                    value: false
+                }], false);
+            }
+        }
+
+        // if (gApp.ancestorFilterPlugin._isSubscriber()) {
+        //     var controlsArea = gApp.down('#controlsArea');
+        //     if (controlsArea) {
+        //         controlsArea.setWidth(40);
+        //     }
+        // }
 
         var controlContainer = gApp.ancestorFilterPlugin.renderArea.add({
             xtype: 'container',
@@ -1348,15 +1354,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 align: 'stretch'
             }
         });
-
-        // controlContainer.add({
-        //     xtype: 'container',
-        //     itemId: 'filterTargetContainer'
-        //     // layout: {
-        //     //     type: 'hbox',
-        //     //     align: 'middle'
-        //     // }
-        // });
 
         // Load the inline filter if settings specify such
         if (gApp.getSetting('showFilter') && !gApp.down('#inlineFilter')) {
@@ -1437,15 +1434,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         id: 'zoomOutBtn',
                         margin: '0 10 0 0',
                         iconCls: 'icon-collapse',
-                        handler: gApp._zoomOut
+                        handler: function () { gApp._zoom(false); }
                     },
                     {
                         xtype: 'rallybutton',
                         itemId: 'zoomInBtn',
                         id: 'zoomInBtn',
                         iconCls: 'icon-expand',
-                        handler: gApp._zoomIn,
                         margin: '0 20 0 0',
+                        handler: function () { gApp._zoom(true); }
                     }
                 ]
             },
@@ -1478,9 +1475,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
         ]);
 
-        if (gApp._isAncestorSelected()) {
-            gApp._refreshTargetFilters();
-        }
+        // if (gApp._isAncestorSelected()) {
+        //     gApp._refreshTargetFilters();
+        // }
 
         gApp._refreshTimeline();
     },
@@ -1633,6 +1630,36 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         catch (e) { reject(e); }
     },
 
+    // Since we're filtering on a specific PI type, we want to scan through all types above that
+    // selected type and remove PIs that have no children so the end user has a cleaner view 
+    // of PIs that they care about
+    _removeChildlessNodes: function () {
+        if (!gApp._nodes) { return; }
+
+        var toDelete = true;
+        var currentOrd = gApp.filterOrdinal + 1;
+        var maxOrd = gApp._getSelectedAncestorTypeOrdinal() - (gApp._isAncestorSelected() ? 1 : 0);
+        while (currentOrd <= maxOrd) {
+            _.each(gApp._nodes, function (currentNode) {
+                if (currentNode.Name !== 'root' && currentNode.record.id !== 'root' && currentNode.record.get('PortfolioItemType').Ordinal === currentOrd) {
+                    for (let isChildNode of gApp._nodes) {
+                        if (isChildNode.Name !== 'root' && isChildNode.record.id !== 'root' && isChildNode.record.get('Parent').ObjectID === currentNode.record.get('ObjectID') && !isChildNode.toDelete) {
+                            toDelete = false;
+                            break;
+                        }
+                    }
+                    currentNode.toDelete = toDelete;
+                    toDelete = true;
+                }
+            });
+            currentOrd++;
+        }
+
+        gApp._nodes = _.filter(gApp._nodes, function (currentNode) {
+            return !currentNode.toDelete;
+        });
+    },
+
     _getReleases: async function () {
         var defaultProjectID = 167513414724;
         var projectID = gApp.getContext().getProject().ObjectID;
@@ -1706,7 +1733,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             gApp.releases = records;
                             resolve();
                         }
-                        else { reject(); }
+                        else { reject(new Error()); }
                     }
                 }
             });
@@ -1872,6 +1899,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
         });
         return model;
+    },
+
+    _convertOrdinalToDepth: function (ord) {
+        var topLevelOrd = gApp._getSelectedAncestorType().get('Ordinal');
+
     },
 
     _shouldShowRoot() {
