@@ -258,7 +258,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var timeend = new Date(Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter));
 
         // If ancestor has planned dates, set axis to them
-        if (gApp._nodes && gApp._nodes.length) {
+        if (gApp._isAncestorSelected() && gApp._nodes && gApp._nodes.length) {
             var start = gApp._nodes[0].record.get('PlannedStartDate');
             var end = gApp._nodes[0].record.get('PlannedEndDate');
 
@@ -275,9 +275,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 }
             }
         }
-        gApp.down('#axisStartDate').setValue(timebegin);
-        gApp.down('#axisEndDate').setValue(timeend);
-        gApp._setTimeScaler(timebegin, timeend);
+        gApp._setAxisDateFields(timebegin, timeend);
     },
 
     _setTimeScaler: function (timebegin, timeend) {
@@ -309,6 +307,19 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('x2', function () { return gApp.dateScaler(new Date()); })
             .attr('y2', function () { return height; })
             .attr('class', 'today-line');
+    },
+
+    _setAxisDateFields: function (start, end) {
+        if (end < start) {
+            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
+            return;
+        }
+
+        gApp.down('#axisStartDate').setValue(start);
+        gApp.down('#axisEndDate').setValue(end);
+
+        gApp._setTimeScaler(start, end);
+        gApp._rescaledStart();
     },
 
     _zoomedStart: function () {
@@ -349,20 +360,24 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 gApp.down('#zoomInBtn').setDisabled(false);
             }
 
-            axisStart.setValue(startDate);
-            axisEnd.setValue(endDate);
+            gApp._setAxisDateFields(startDate, endDate);
 
             //gApp._setTimeScaler(startDate, endDate);
-            gApp._rescaledStart();
+            //gApp._rescaledStart();
         }
     },
 
     _setTimeline: function (d) {
-        gApp._setTimeScaler(
-            new Date(d.data.record.get('PlannedStartDate')),
-            new Date(d.data.record.get('PlannedEndDate'))
-        );
-        gApp._rescaledStart();
+        var start = d.data.record.get('PlannedStartDate');
+        var end = d.data.record.get('PlannedEndDate');
+
+        gApp._setAxisDateFields(start, end);
+
+        // gApp._setTimeScaler(
+        //     new Date(start),
+        //     new Date(end)
+        // );
+        //gApp._rescaledStart();
     },
 
     _getSVGHeight: function () {
@@ -451,8 +466,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('alignment-baseline', 'central')
             .text(function (d) { return d.expanded ? '9' : '7'; })
             .on('click', function (d) {
-                if (d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
                 d.expanded = !d.expanded;
+                if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
             });
 
         if (gApp.getSetting('showReleases') && gApp.releases) {
@@ -1169,21 +1184,21 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
     },
 
-    _onAxisDateChange: function () {
-        var axisStart = gApp.down('#axisStartDate');
-        var startDate = axisStart.getValue();
+    // _onAxisDateChange: function () {
+    //     var axisStart = gApp.down('#axisStartDate');
+    //     var startDate = axisStart.getValue();
 
-        var axisEnd = gApp.down('#axisEndDate');
-        var endDate = axisEnd.getValue();
+    //     var axisEnd = gApp.down('#axisEndDate');
+    //     var endDate = axisEnd.getValue();
 
-        if (endDate < startDate) {
-            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
-            return;
-        }
+    //     if (endDate < startDate) {
+    //         Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
+    //         return;
+    //     }
 
-        gApp._setTimeScaler(startDate, endDate);
-        // gApp._rescaledStart();
-    },
+    //     gApp._setTimeScaler(startDate, endDate);
+    //     // gApp._rescaledStart();
+    // },
 
     _refreshTimeline: async function () {
         // TODO: this is kind of a hack for dealing with multiple 'select' listeners
@@ -1362,8 +1377,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 labelStyle: fontStyle + '; margin-right: 0;',
                 labelWidth: 65,
                 margin: '0 20 0 0',
-                validateOnChange: true,
-                listeners: { aftervalidate: gApp._onAxisDateChange }
+                validateOnChange: true
+                //listeners: { aftervalidate: gApp._onAxisDateChange }
             },
             {
                 xtype: 'rallydatefield',
@@ -1374,8 +1389,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 labelStyle: fontStyle + '; margin-right: 0;',
                 labelWidth: 65,
                 margin: '0 20 0 0',
-                validateOnChange: true,
-                listeners: { aftervalidate: gApp._onAxisDateChange }
+                validateOnChange: true
+                //listeners: { aftervalidate: gApp._onAxisDateChange }
             },
             {
                 xtype: 'container',
