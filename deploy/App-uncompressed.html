@@ -710,10 +710,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     }
 });
 /* jshint ignore:end */
-                // (function () {
-//     var Ext = window.Ext4 || window.Ext;
-
-Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
+                Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     extend: 'Rally.app.TimeboxScopedApp',
     settingsScope: 'project',
     componentCls: 'app',
@@ -726,11 +723,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             showReleases: true,
             hideArchived: true,
             showFilter: true,
-            //onlyDependencies: false,
-            // startDate: Ext.Date.subtract(new Date(), Ext.Date.DAY, 90),
-            // endDate: Ext.Date.add(new Date(), Ext.Date.DAY, 60),
             lineSize: 40,
-            //lowestDependencies: true,
             cardHover: true
         }
     },
@@ -769,18 +762,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 name: 'showFilter',
                 labelAlign: 'top'
             },
-            // {
-            //     xtype: 'rallycheckboxfield',
-            //     fieldLabel: 'Only items with dependencies',
-            //     name: 'onlyDependencies',
-            //     labelAlign: 'top'
-            // },
-            // {
-            //     xtype: 'rallycheckboxfield',
-            //     fieldLabel: 'Only Feature dependencies',
-            //     name: 'lowestDependencies',
-            //     labelAlign: 'top'
-            // },
             {
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Allow card pop-up on hover',
@@ -911,32 +892,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var nodetree = gApp._createNodeTree(gApp._nodes);
         if (!nodetree) { return; }
 
-        var svg = d3.select('#rootSurface');
-        svg.attr('height', gApp._rowHeight * (nodetree.value + (gApp.getSetting('showTimeLine') ? 1 : 0) + (gApp.getSetting('showReleases') ? 1 : 0)));
-        //Make surface the size available in the viewport (minus the selectors and margins)
-        var rs = gApp.down('#rootSurface');
-        rs.getEl().setHeight(svg.attr('height'));
-        svg.attr('width', rs.getEl().getWidth());
-        svg.attr('class', 'rootSurface');
+        gApp._setSVGDimensions(nodetree);
         gApp._startTreeAgain();
     },
 
-    _cascadeNewValue: function (parent, value) {
-        if (parent && parent.id !== 'root') {
-            parent.value -= value;
-            gApp._cascadeNewValue(parent.parent, value);
-        }
-    },
-
     _switchChildren: function (d) {
-        if (d.children) {
-            //gApp._collapseChildren(d.children);
-            gApp._collapse(d);
-            //gApp._cascadeNewValue(d.parent, d._value);
-        } else {
-            // gApp._expandChildren(d._children);
-            gApp._expand(d);
-        }
+        if (d.children) { gApp._collapse(d); }
+        else { gApp._expand(d); }
         gApp._zoomedStart();
     },
 
@@ -1107,13 +1069,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
     },
 
-    _indexTree: function (nodetree) {
-        nodetree.eachBefore(function (d) {
-            d.rheight = d.x1 - d.x0;
-            d.rpos = d.x0 - (d.parent ? d.parent.x0 : 0); //Deal with root node
-        });
-    },
-
     _setTimeline: function (d) {
         gApp._setTimeScaler(
             new Date(d.data.record.get('PlannedStartDate')),
@@ -1124,6 +1079,16 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _getSVGHeight: function () {
         return parseInt(d3.select('#rootSurface').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0); // - (gApp.getSetting('showReleases') ? gApp._rowHeight : 0)
+    },
+
+    _setSVGDimensions: function (nodetree) {
+        var svg = d3.select('#rootSurface');
+        svg.attr('height', gApp._rowHeight * (nodetree.value + (gApp.getSetting('showTimeLine') ? 1 : 0) + (gApp.getSetting('showReleases') ? 1 : 0)));
+        //Make surface the size available in the viewport (minus the selectors and margins)
+        var rs = gApp.down('#rootSurface');
+        rs.getEl().setHeight(svg.attr('height'));
+        svg.attr('width', rs.getEl().getWidth());
+        svg.attr('class', 'rootSurface');
     },
 
     _itemMenu: function (d) {
@@ -1181,11 +1146,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _refreshTree: function () {
 
         var symbolWidth = 20;
+        gApp._nodeTree.sum(function () { return 1; });
         var partition = d3.partition();
+        var nodetree = partition(gApp._nodeTree);
 
-        var nodetree = gApp._nodeTree;
-        nodetree = partition(nodetree);
-        gApp._indexTree(nodetree);
+        gApp._setSVGDimensions(nodetree);
 
         // Expand / Collapse all
         d3.select('#zoomTree').selectAll('.expandAll')
@@ -2187,10 +2152,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
         ]);
 
-        // if (gApp._isAncestorSelected()) {
-        //     gApp._refreshTargetFilters();
-        // }
-
         gApp._refreshTimeline();
     },
 
@@ -2239,11 +2200,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
 
         }
-        // else {
-        //     if (gApp._isAncestorSelected() || parentRecords) {// || type.get('Ordinal') !== gApp.down('#filterTimelineCombo').getValue()) {
-        //         dataContext.project = null;
-        //     }
-        // }
 
         // Parents have been filtered so we only want children underneath those
         // parents that were returned to avoid breaking the tree
@@ -2322,18 +2278,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                 return this.data[fieldName] || null;
                             }
                         }]);
-                        var promises = [];
+                        if (!results.length) {
+                            reject(`No Portfolio Items of type ${topType.get('Name')} found within this project (or selected scoping)`);
+                        }
                         _.forEach(results, function (record) {
                             record.data.Parent = { '_ref': 'root', ObjectID: 'root' };
-                            // promises.push(new Promise(function (newResolve, newReject) {
-                            //     gApp._getArtifactsFromRoot([record], newResolve, newReject);
-                            // }));
                         });
                         gApp._getArtifactsFromRoot(results, resolve, reject);
-                        // Promise.all(promises).then(
-                        //     function () { resolve(); },
-                        //     function (error) { reject(error); }
-                        // );
                     },
                     failure: function (error) { reject(error); },
                     scope: this
@@ -2613,11 +2564,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return model;
     },
 
-    _convertOrdinalToDepth: function (ord) {
-        var topLevelOrd = gApp._getSelectedAncestorType().get('Ordinal');
-
-    },
-
     _shouldShowRoot() {
         if (!gApp._isAncestorSelected()) { return false; }
         else { return gApp.getSetting('includeAncestor'); }
@@ -2646,10 +2592,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _createNodeTree: function (nodes) {
         try {
-            var nodetree = gApp._stratifyNodeTree(nodes);
-            nodetree.sum(function (d) { return 1; });        // Set the dimensions in svg to match
-            gApp._nodeTree = nodetree;      //Save for later
-            return nodetree;
+            gApp._nodeTree = gApp._stratifyNodeTree(nodes)
+                .sum(function (d) { return 1; });        // Set the dimensions in svg to match
+            //gApp._nodeTree = nodetree;      //Save for later
+            return gApp._nodeTree;
         }
         catch (e) {
             gApp._showError(e.message);
@@ -2884,7 +2830,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         this.callParent(arguments);
     }
 });
-//}());
                 (function () {
     var Ext = window.Ext4 || window.Ext;
 
