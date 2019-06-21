@@ -5,6 +5,7 @@
     "sdk": "2.1",
     "javascript": [
         "node_modules/@agile-central-technical-services/utils-ancestor-pi-app-filter/index.js",
+        "multi-level-pi-filter.js",
         "App.js",
         "DateMixin.js",
         "CFDChart.js",

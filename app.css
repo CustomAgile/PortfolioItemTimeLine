@@ -322,22 +322,22 @@ circle.no--errors {
   margin-top: 0;
 }
 
-.inline-filter-panel .apply-filters-button {
-  position: absolute;
+.apply-filters-button {
+  /* position: absolute;
   right: 150px;
-  top: 12px;
+  top: 12px; */
   background-color: #75c63f;
 }
 
-.inline-filter-panel .filter-target-combo {
+/* .inline-filter-panel .filter-target-combo {
   position: absolute;
   right: 320px;
   top: 12px;
-}
+} */
 
-.inline-filter-panel>.x-panel-body .quick-filter-panel {
+/* .inline-filter-panel>.x-panel-body .quick-filter-panel {
   padding-right: 550px;
-}
+} */
 
 #zoomInBtn, #zoomOutBtn {
   padding: 0;
