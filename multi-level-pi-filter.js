@@ -44,7 +44,7 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
 
     portfolioItemTypes: [],
 
-    constructor: function (config) {
+    constructor: function () {
         this.callParent(arguments);
     },
 
@@ -55,8 +55,6 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
 
     init: function (cmp) {
         this.cmp = cmp;
-
-        //this.cmp.on('resize', this._onCmpResize, this);
 
         // Get the area where filter button will render
         this.btnRenderArea = this.cmp.down('#' + this.btnRenderAreaId);
@@ -119,7 +117,6 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
     // Requires that app settings are available (e.g. from 'beforelaunch')
     _addFilters: function () {
 
-        //if (this._showMultiLevelFilter()) { TODO
         return new Promise(function (resolve, reject) {
             var promises = [];
             if (this.btnRenderArea) {
@@ -159,7 +156,7 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
                                 this.filterControls = [];
 
                                 _.each(models, function (model, key) {
-                                    promises.push(new Promise(function (newResolve, newReject) {
+                                    promises.push(new Promise(function (newResolve) {
                                         var filterName = `inlineFilter${key}`;
                                         this.filterControls.push(Ext.create('Rally.ui.inlinefilter.InlineFilterControl', {
                                             xtype: 'rallyinlinefiltercontrol',
@@ -216,7 +213,6 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
                                     this.btnRenderArea.add(this.clearAllButton);
                                     this.tabPanel.setActiveTab(0);
                                     this.tabPanel.hide();
-                                    //this._applyFilters();
 
                                     // Without this, the components are clipped on narrow windows
                                     this.btnRenderArea.setOverflowXY('auto', 'auto');
@@ -270,14 +266,15 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
         return returnVal;
     },
 
-    _onFilterReady: function (inlineFilterPanel) {
+    _onFilterReady: function (panel) {
+        let filterCount = panel.quickFilterPanel.getFilters().length + panel.advancedFilterPanel.getFilters().length;
         let tab = this.tabPanel.add({
-            title: inlineFilterPanel.model && inlineFilterPanel.model.elementName,
+            title: '' + (panel.model && panel.model.elementName) + (filterCount ? ` (${filterCount})` : ''),
             html: '',
-            itemId: `${inlineFilterPanel.model && inlineFilterPanel.model.elementName}-tab`
+            itemId: `${panel.model && panel.model.elementName}-tab`
         });
-        tab.add(inlineFilterPanel);
-        inlineFilterPanel.expand();
+        tab.add(panel);
+        panel.expand();
     },
 
     _applyFilters() {
@@ -301,18 +298,32 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
             }
         }
 
+        _.each(this.filterControls, function (filterControl) {
+            let typeName = (filterControl.inlineFilterButton.inlineFilterPanel.model.elementName) || 'unknown';
+            this._setTabText(typeName, filterControl.inlineFilterButton.getFilters().length);
+        }, this);
+
         if (this.ready) {
             this.fireEvent('change', this.getFilters());
         }
     },
 
+    _setTabText: function (typeName, filterCount) {
+        var titleText = filterCount ? `${typeName} (${filterCount})` : typeName;
+        var tab = this.tabPanel.child(`#${typeName}-tab`);
+
+        if (tab) { tab.setTitle(titleText); }
+    },
+
     _toggleFilters: function (btn) {
         if (this.tabPanel.isHidden()) {
             this.tabPanel.show();
+            btn.setToolTipText('Hide Filters');
             btn.addCls('primary');
             btn.removeCls('secondary');
         } else {
             this.tabPanel.hide();
+            btn.setToolTipText('Show Filters');
             btn.addCls('secondary');
             btn.removeCls('primary');
         }

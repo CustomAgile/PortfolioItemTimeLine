@@ -1,9 +1,3 @@
-.today-line {
-  stroke-dasharray: 5,5;
-  stroke:rgb(44, 44, 216);
-  stroke-width: 2;
-}
-
 .tree-arrow {
   fill: grey;
 }
@@ -313,12 +307,12 @@ circle.no--errors {
 }
 
 .axis line {
-  stroke-opacity: 0.3;
+  stroke-opacity: 0.17;
   shape-rendering: crispEdges;
+  stroke: #000;
 }
 
-#Utils.AncestorPiAppFilter.piType-labelEl,
-#ignoreScopeControl-labelEl {
+#Utils.AncestorPiAppFilter.piType-labelEl, #ignoreScopeControl-labelEl {
   margin-top: 0;
 }
 
@@ -355,4 +349,68 @@ text.collapse-arrow {
   fill: transparent;
   stroke-width: 1;
   stroke: black;
+}
+
+.x-tab-bar .x-tab-default {
+  background-color: #00a9e0;
+}
+
+.x-tab-bar .x-tab-default .x-tab-inner {
+  color: white;
+}
+
+.x-tab-bar .x-tab-active {
+  background-color: white;
+}
+
+.x-tab-bar .x-tab-active .x-tab-inner {
+  color: #00a9e0;
+}
+
+.timeline-tooltip rect {
+  fill: rgb(76, 132, 206);
+  fill-opacity: 0.7;
+  stroke: rgb(37, 65, 102);
+  stroke-opacity: 0.3;
+}
+
+.timeline-tooltip text {
+  fill: white;
+  font-size: 1.1em;
+}
+
+.today-line {
+  stroke-dasharray: 5, 5;
+  stroke: rgb(44, 44, 216);
+  stroke-width: 3;
+}
+
+.today-line-hover {
+  stroke-dasharray: 5, 5;
+  stroke: rgb(91, 137, 224);
+  stroke-width: 5;
+}
+
+.iteration-line {
+  stroke-dasharray: 10, 2;
+  stroke: rgb(0, 0, 0);
+  stroke-width: 3;
+}
+
+.iteration-line-hover {
+  stroke-dasharray: 10, 2;
+  stroke: rgb(83, 83, 83);
+  stroke-width: 5;
+}
+
+.milestone-line {
+  stroke-dasharray: 2, 2;
+  stroke: rgb(0, 0, 0);
+  stroke-width: 3;
+}
+
+.milestone-line-hover {
+  stroke-dasharray: 2, 2;
+  stroke: rgb(83, 83, 83);
+  stroke-width: 5;
 }

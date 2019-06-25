@@ -144,7 +144,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         {
             xtype: 'container',
             itemId: 'filterBox',
-            margin: '15 0 15 0'
+            margin: '10 0 10 0'
         },
         {
             itemId: 'additionalSettingsArea',
@@ -153,14 +153,14 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             layout: {
                 type: 'hbox',
                 align: 'middle',
-                defaultMargins: '0 10 10 0',
+                defaultMargins: '0 10 15 0',
             }
         },
         {
             xtype: 'container',
             itemId: 'rootSurface',
             id: 'rootSurface',
-            padding: '5 0 5 0',
+            padding: '10 0 5 0',
             layout: 'auto',
             width: '98%',
             title: 'Loading...',
@@ -188,7 +188,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _switchChildren: function (d) {
         if (d.children) { gApp._collapse(d); }
         else { gApp._expand(d); }
-        gApp._zoomedStart();
+        gApp._rescaledStart();
     },
 
     _collapse: function (d) {
@@ -215,7 +215,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         } else {
             d3.selectAll('.collapse-icon').dispatch('collapseAll');
         }
-        gApp._zoomedStart();
+        gApp._rescaledStart();
     },
 
     _collapseChildren: function (d) {
@@ -244,11 +244,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 gApp._expand(d);
 
             });
-            gApp._zoomedStart();
+            gApp._rescaledStart();
         } else {
             for (let i = 0; i < gApp._getSelectedAncestorTypeOrdinal(); i++) {
                 d3.selectAll('.collapse-icon').dispatch('expandAll');
-                gApp._zoomedStart();
+                gApp._rescaledStart();
             }
         }
         gApp.setLoading(false);
@@ -287,11 +287,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _setAxis: function () {
         if (gApp.gX) { gApp.gX.remove(); }
+        var topPadding = (gApp.getSetting('showReleases') && gApp.releases) ? 47 : 20;
         var svg = d3.select('#rootSurface');
         var width = +svg.attr('width');
         var height = +svg.attr('height');
         gApp.xAxis = d3.axisBottom(gApp.dateScaler)
-            .ticks(((width - gApp._rowHeight) + 2) / 80)
+            .ticks()
             .tickSize(height)
             .tickPadding(gApp.getSetting('showTimeLine') ? (8 - height) : 0);
         gApp.gX = svg.append('g');
@@ -301,14 +302,102 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('height', height)
             .attr('class', 'axis')
             .call(gApp.xAxis);
-        d3.selectAll('.tick line').attr('y1', 20);
+
+        d3.selectAll('.tick line').attr('y1', topPadding);
+
+        if (gApp.iterations && gApp.iterations.length) {
+            gApp.gX.selectAll('iterationticks')
+                .data(gApp.iterations)
+                .enter().append('line')
+                .attr('x1', function (d) { return gApp.dateScaler(d.get('StartDate')); })
+                .attr('y1', topPadding)
+                .attr('x2', function (d) { return gApp.dateScaler(d.get('StartDate')); })
+                .attr('y2', function () { return height; })
+                .attr('class', 'iteration-line')
+                .on('mouseover', function (d) {
+                    let tipText = [
+                        `Sprint: ${d.get('Name')}`,
+                        `Start Date: ${Rally.util.DateTime.format(d.get('StartDate'), 'm-d-y')}`,
+                        `End Date: ${Rally.util.DateTime.format(d.get('EndDate'), 'm-d-y')}`
+                    ];
+                    let tipId = `${d.get('Name').replace(/\s/g, '')}-iteration-line`;
+
+                    gApp._addHoverTooltip(this, 'iteration-line-hover', tipId, tipText, 140, 60);
+                })
+                .on('mouseout', function (d) {
+                    d3.select(this).attr('class', 'iteration-line');
+                    d3.select(`#${d.get('Name').replace(/\s/g, '')}-iteration-line`).remove();
+                });
+        }
+
+        if (gApp.milestones && gApp.milestones.length) {
+            gApp.gX.selectAll('milestoneticks')
+                .data(gApp.milestones)
+                .enter().append('line')
+                .attr('x1', function (d) { return gApp.dateScaler(d.get('TargetDate')); })
+                .attr('y1', topPadding)
+                .attr('x2', function (d) { return gApp.dateScaler(d.get('TargetDate')); })
+                .attr('y2', function () { return height; })
+                .attr('class', 'milestone-line')
+                .on('mouseover', function (d) {
+                    let tipText = [
+                        `${d.get('FormattedID')}: ${d.get('Name')}`,
+                        `Target Date: ${Rally.util.DateTime.format(d.get('TargetDate'), 'm-d-y')}`
+                    ];
+                    let tipId = `${d.get('FormattedID')}-milestone-line`;
+
+                    gApp._addHoverTooltip(this, 'milestone-line-hover', tipId, tipText, 150, 45);
+                })
+                .on('mouseout', function (d) {
+                    d3.select(this).attr('class', 'milestone-line');
+                    d3.select(`#${d.get('FormattedID')}-milestone-line`).remove();
+                });
+        }
+
         gApp.gX.append('line')
             .attr('x1', function () { return gApp.dateScaler(new Date()); })
-            .attr('y1', 20)
+            .attr('y1', topPadding)
             .attr('x2', function () { return gApp.dateScaler(new Date()); })
             .attr('y2', function () { return height; })
-            .attr('class', 'today-line');
+            .attr('class', 'today-line')
+            .on('mouseover', function () {
+                gApp._addHoverTooltip(this, 'today-line-hover', 'todayLineTooltip', ['Today'], 48, 25);
+            })
+            .on('mouseout', function () {
+                d3.select(this).attr('class', 'today-line');
+                d3.select('#todayLineTooltip').remove();
+            });
+
     },
+
+    _addHoverTooltip: function (hoverEl, hoverElClass, tipId, tipText, width, height) {
+        let coords = d3.mouse(hoverEl);
+        let tooltip = d3.select('#rootSurface').append('g')
+            .attr('id', tipId)
+            .attr('class', 'timeline-tooltip')
+            .attr('transform', `translate(${coords[0] + 55},${coords[1]})`);
+
+        tooltip.append('rect')
+            .attr('width', width)
+            .attr('height', height)
+            .attr('rx', 7)
+            .attr('ry', 7);
+
+        let textObj = tooltip.append('text')
+            .attr('x', 5)
+            .attr('y', 2)
+            .text('');
+
+        _.each(tipText, function (newLine) {
+            textObj.append('tspan')
+                .attr('x', 7)
+                .attr('dy', '1.3em')
+                .text(newLine);
+        });
+
+        d3.select(hoverEl).attr('class', hoverElClass);
+    },
+
 
     _setAxisDateFields: function (start, end) {
         if (end < start) {
@@ -316,10 +405,35 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             return;
         }
 
-        gApp.down('#axisStartDate').setValue(start);
-        gApp.down('#axisEndDate').setValue(end);
+        var startDateField = gApp.down('#axisStartDate');
+        var endDateField = gApp.down('#axisEndDate');
+
+        startDateField.suspendEvents(false);
+        endDateField.suspendEvents(false);
+
+        startDateField.setValue(start);
+        endDateField.setValue(end);
+
+        startDateField.resumeEvents();
+        endDateField.resumeEvents();
 
         gApp._setTimeScaler(start, end);
+        gApp._rescaledStart();
+    },
+
+    _onAxisDateChange: function () {
+        var axisStart = gApp.down('#axisStartDate');
+        var startDate = axisStart.getValue();
+
+        var axisEnd = gApp.down('#axisEndDate');
+        var endDate = axisEnd.getValue();
+
+        if (endDate < startDate) {
+            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
+            return;
+        }
+
+        gApp._setTimeScaler(startDate, endDate);
         gApp._rescaledStart();
     },
 
@@ -331,8 +445,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _rescaledStart: function () {
-        gApp._setAxis();
         gApp._zoomedStart();
+        gApp._setAxis();
     },
 
     _startTreeAgain: function () {
@@ -373,12 +487,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var end = d.data.record.get('PlannedEndDate');
 
         gApp._setAxisDateFields(start, end);
-
-        // gApp._setTimeScaler(
-        //     new Date(start),
-        //     new Date(end)
-        // );
-        //gApp._rescaledStart();
     },
 
     _getSVGHeight: function () {
@@ -415,7 +523,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var e = gApp.dateScaler(d.endX);
 
         d.drawnX = x;
-        // d.drawnX = (x < 0 ? 0 : x);
         d.drawnY = -gApp._rowHeight / 1.5;
         d.drawnWidth = e - d.drawnX;
         d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
@@ -434,7 +541,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var actualE = gApp.dateScaler(d.actualEndX);
         var svgHeight = gApp._getSVGHeight();
 
-        d.plannedDrawnX = plannedX;//(plannedX < 0 ? 0 : plannedX);
+        d.plannedDrawnX = plannedX;
         d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
         d.plannedDrawnWidth = plannedE - d.plannedDrawnX;
         d.plannedDrawnWidth = d.plannedDrawnWidth < 0 ? 0 : d.plannedDrawnWidth;
@@ -553,8 +660,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             })
             .append('rect')
             .attr('id', function (d) { return 'rect-' + d.data.Name; })
-            .attr('rx', gApp._rowHeight / 4)
-            .attr('ry', gApp._rowHeight / 4)
+            .attr('rx', gApp._rowHeight / 6)
+            .attr('ry', gApp._rowHeight / 6)
             .attr('width', function (d) { return d.plannedDrawnWidth; })
             .attr('height', gApp._rowHeight / 2)
             .attr('fill', function (d) { return gApp.colours[d.depth + 1]; })
@@ -1171,55 +1278,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
     },
 
-    //_onFilterReady: function (inlineFilterPanel) {
-    //    gApp.down('#filterBox').add(inlineFilterPanel);
-
-    // Button to apply filters
-    // gApp.down('rallyquickfilterpanel').add({
-    //     xtype: 'rallybutton',
-    //     itemId: 'applyFiltersBtn',
-    //     handler: gApp._applyFilters,
-    //     text: 'Apply filters to timeline',
-    //     cls: 'apply-filters-button',
-    //     disabled: true
-    // });
-
-    // // Dropdown for specifying which PI type the filters and scoping apply to
-    // gApp.down('rallyquickfilterpanel').add({
-    //     xtype: 'rallyportfolioitemtypecombobox',
-    //     fieldLabel: 'Filter and project scoping apply to',
-    //     labelSeparator: '',
-    //     labelWidth: 100,
-    //     width: 200,
-    //     labelStyle: 'line-height: 15px; margin-top: -8px; margin-right: 0;',
-    //     displayField: 'Name',
-    //     valueField: 'Ordinal',
-    //     allowNoEntry: false,
-    //     itemId: 'filterTargetCombo',
-    //     cls: 'filter-target-combo',
-    //     listeners: {
-    //         'change': gApp._onTargetFilterChange,
-    //         'ready': function () { this.setValue(0); }
-    //     }
-    // });
-    //},
-
-    // _onAxisDateChange: function () {
-    //     var axisStart = gApp.down('#axisStartDate');
-    //     var startDate = axisStart.getValue();
-
-    //     var axisEnd = gApp.down('#axisEndDate');
-    //     var endDate = axisEnd.getValue();
-
-    //     if (endDate < startDate) {
-    //         Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
-    //         return;
-    //     }
-
-    //     gApp._setTimeScaler(startDate, endDate);
-    //     // gApp._rescaledStart();
-    // },
-
     _refreshTimeline: async function () {
         // TODO: this is kind of a hack for dealing with multiple 'select' listeners
         // You should fix this later
@@ -1241,9 +1299,18 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.setLoading('Loading portfolio items...');
         gApp.loadingTimeline = true;
 
+        await gApp._getDefaultProjectID();
+
         if (gApp.getSetting('showReleases') && !gApp.releases) {
-            try { await gApp._getReleases(); }
-            catch (e) { gApp._showError('Failed to fetch releases'); }
+            await gApp._getReleases();
+        }
+
+        if (!gApp.iterations) {
+            await gApp._getIterations();
+        }
+
+        if (!gApp.milestones) {
+            await gApp._getMilestones();
         }
 
         new Promise(function (resolve, reject) {
@@ -1314,7 +1381,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _kickOff: function () {
+        // variable to bind to the expand/collapse all button on timeline
         gApp.expandData = [{ expanded: true }];
+
         gApp._typeStore = gApp.ancestorFilterPlugin.portfolioItemTypes;
 
         var childTypes = gApp._getTypeList(gApp._highestOrdinal() - 1);
@@ -1349,8 +1418,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 labelStyle: fontStyle + '; margin-right: 0;',
                 labelWidth: 65,
                 margin: '0 20 0 0',
-                validateOnChange: true
-                //listeners: { aftervalidate: gApp._onAxisDateChange }
+                validateOnChange: true,
+                listeners: { aftervalidate: gApp._onAxisDateChange }
             },
             {
                 xtype: 'rallydatefield',
@@ -1361,8 +1430,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 labelStyle: fontStyle + '; margin-right: 0;',
                 labelWidth: 65,
                 margin: '0 20 0 0',
-                validateOnChange: true
-                //listeners: { aftervalidate: gApp._onAxisDateChange }
+                validateOnChange: true,
+                listeners: { aftervalidate: gApp._onAxisDateChange }
             },
             {
                 xtype: 'container',
@@ -1424,7 +1493,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 height: 22,
                 toolTipText: 'Export Timeline...',
                 handler: gApp._exportTimeline
-            }
+            },
+            // {
+            //     xtype: 'rallymultiobjectpicker',
+            //     fieldLabel: 'Show gridlines for',
+            //     labelStyle: 'font-size: 12px',
+            //     labelWidth: 80,
+            //     labelSeparator: '',
+            //     handler: gApp._rescaledStart,
+            // }
         ]);
 
         gApp._refreshTimeline();
@@ -1570,14 +1647,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         catch (e) { reject(e); }
     },
 
-    // Since we're filtering on a specific PI type, we want to scan through all types above that
-    // selected type and remove PIs that have no children so the end user has a cleaner view 
+    // Since we're filtering on a specific PI type, we want to scan through all types above the
+    // lowest filtered type and remove PIs that have no children so the end user has a cleaner view 
     // of PIs that they care about
     _removeChildlessNodes: function () {
         if (!gApp._nodes) { return; }
 
         var toDelete = true;
-        var currentOrd = 1;
+        var currentOrd = gApp._getLowestFilteredOrdinal();
+        if (currentOrd === 0) { currentOrd++; }
         var maxOrd = gApp._getSelectedAncestorTypeOrdinal() - (gApp._isAncestorSelected() ? 1 : 0);
         while (currentOrd <= maxOrd) {
             _.each(gApp._nodes, function (currentNode) {
@@ -1600,7 +1678,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
     },
 
-    _getReleases: async function () {
+    _getDefaultProjectID: async function () {
         var defaultProjectID = 167513414724;
         var projectID = gApp.getContext().getProject().ObjectID;
         var project;
@@ -1648,17 +1726,59 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             while (project && project.length && project[0].get('Parent'));
         }
 
+        gApp.defaultProjectID = projectID;
+
+        return projectID;
+    },
+
+    _getReleases: async function () {
+        try {
+            gApp.releases = await gApp._getTimebox('Release', ['Name', 'ReleaseStartDate', 'ReleaseDate']);
+        } catch (e) {
+            gApp.releases = [];
+            Rally.ui.notify.Notifier.showError({ message: 'Error while fetching releases' });
+        }
+    },
+
+    _getIterations: async function () {
+        try {
+            gApp.iterations = await gApp._getTimebox('Iteration', ['Name', 'StartDate', 'EndDate']);
+        } catch (e) {
+            gApp.iterations = [];
+            Rally.ui.notify.Notifier.showError({ message: 'Error while fetching iterations' });
+        }
+    },
+
+    _getMilestones: async function () {
+        try {
+            let projectID = gApp.defaultProjectID || await gApp._getDefaultProjectID();
+            let filter = [{
+                property: 'Projects',
+                operator: 'contains',
+                value: `/project/${projectID}`
+            }];
+            gApp.milestones = await gApp._getTimebox('Milestone', ['Name', 'FormattedID', 'TargetDate'], filter);
+        } catch (e) {
+            gApp.milestones = [];
+            Rally.ui.notify.Notifier.showError({ message: 'Error while fetching milestones' });
+        }
+    },
+
+    _getTimebox: async function (modelName, fetchItems, filter) {
+        var projectID = gApp.defaultProjectID || await gApp._getDefaultProjectID();
+        var storeFilter = filter || [{
+            property: 'Project.ObjectID',
+            operator: '=',
+            value: projectID
+        }];
+
         return new Promise(function (resolve, reject) {
             Ext.create('Rally.data.wsapi.Store', {
-                model: 'Release',
+                model: modelName,
                 autoLoad: true,
                 limit: Infinity,
-                fetch: ['Name', 'ReleaseStartDate', 'ReleaseDate'],
-                filters: [{
-                    property: 'Project.ObjectID',
-                    operator: '=',
-                    value: projectID
-                }],
+                fetch: fetchItems,
+                filters: storeFilter,
                 context: {
                     project: null,
                     projectScopeDown: false,
@@ -1667,11 +1787,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 listeners: {
                     load: function (store, records, success) {
                         if (success) {
-                            if (!records.length) {
-                                Rally.ui.notify.Notifier.showError({ message: 'Failed to find any releases' });
-                            }
-                            gApp.releases = records;
-                            resolve();
+                            resolve(records);
                         }
                         else { reject(new Error()); }
                     }
@@ -1823,6 +1939,22 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _highestOrdinal: function () {
         return _.max(gApp._typeStore, function (type) { return type.get('Ordinal'); }).get('Ordinal');
+    },
+
+    _getLowestFilteredOrdinal() {
+        var lowestOrd = gApp._highestOrdinal();
+        if (gApp.advFilters) {
+            _.each(gApp.advFilters, function (filter, key) {
+                if (filter.length) {
+                    let ord = gApp._getOrdFromModel(key);
+                    if (ord !== null && ord < lowestOrd) {
+                        lowestOrd = ord;
+                    }
+                }
+            });
+        }
+
+        return lowestOrd;
     },
 
     _getModelFromOrd: function (number) {
@@ -2101,7 +2233,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _addMultiLevelFilterPlugin: function () {
-        //if (gApp.getSetting('showFilter') && !gApp.multiLevelFilterPlugin) {
         gApp.multiLevelFilterPlugin = Ext.create('Utils.MultiLevelPiAppFilter', {
             ptype: 'UtilsMultiLevelPiAppFilter',
             pluginId: 'multiLevelFilterPlugin',
@@ -2132,7 +2263,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
         });
         gApp.addPlugin(gApp.multiLevelFilterPlugin);
-        //}
     },
 
     launch: function () {
