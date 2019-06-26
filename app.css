@@ -368,9 +368,9 @@ text.collapse-arrow {
 }
 
 .timeline-tooltip rect {
-  fill: rgb(76, 132, 206);
+  fill: #4c84ce;
   fill-opacity: 0.7;
-  stroke: rgb(37, 65, 102);
+  stroke: #254166;
   stroke-opacity: 0.3;
 }
 
@@ -381,36 +381,94 @@ text.collapse-arrow {
 
 .today-line {
   stroke-dasharray: 5, 5;
-  stroke: rgb(44, 44, 216);
+  stroke: #2c2cd8;
   stroke-width: 3;
 }
 
 .today-line-hover {
   stroke-dasharray: 5, 5;
-  stroke: rgb(91, 137, 224);
+  stroke: #5b89e0;
   stroke-width: 5;
 }
 
 .iteration-line {
-  stroke-dasharray: 10, 2;
-  stroke: rgb(0, 0, 0);
+  stroke-dasharray: 15, 2;
+  stroke: #000000;
   stroke-width: 3;
 }
 
 .iteration-line-hover {
-  stroke-dasharray: 10, 2;
-  stroke: rgb(83, 83, 83);
+  stroke-dasharray: 15, 2;
+  stroke: #535353;
+  stroke-width: 5;
+}
+
+.release-line {
+  stroke-dasharray: 20, 4;
+  stroke: #000000;
+  stroke-width: 3;
+}
+
+.release-line-hover {
+  stroke-dasharray: 20, 4;
+  stroke: #535353;
   stroke-width: 5;
 }
 
 .milestone-line {
-  stroke-dasharray: 2, 2;
-  stroke: rgb(0, 0, 0);
+  stroke-dasharray: 10, 4;
+  stroke: #000000;
   stroke-width: 3;
 }
 
 .milestone-line-hover {
-  stroke-dasharray: 2, 2;
-  stroke: rgb(83, 83, 83);
+  stroke-dasharray: 10, 4;
+  stroke: #535353;
   stroke-width: 5;
+}
+
+.x-tab-inner {
+  text-overflow: initial;
+  -o-text-overflow: initial;
+  overflow: initial;
+}
+
+.x-tab-bar .x-tab-inner {
+  width: 100%;
+}
+
+.icon-help {
+  cursor: pointer;
+}
+
+#scope-help-icon {
+  opacity: 0.6;
+}
+
+#scopeTip .x-tip-body,
+#filterTip .x-tip-body {
+  border-radius: 5px;
+  color: #222222;
+  background-color: #f6f6f6;
+  border: #d6d6d6 1px solid;
+}
+
+#scopeTip .x-tip-body, #scopeTip .x-tip-anchor {
+  
+}
+
+#filter-help-icon {
+  /* position: absolute;
+  right: 25px;
+  top: 15px; */
+  width: 15px;
+}
+
+#filter-help-icon span {
+  font-size: 14px;
+  color: #006488;
+}
+
+.x-tab-default .x-tab-icon-el {
+  color: white;
 }

@@ -37,6 +37,12 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
 
         /**
          * @cfg {Boolean}
+         * Set to true to hide filters on load
+         */
+        filtersHidden: true,
+
+        /**
+         * @cfg {Boolean}
          * Set to true to hide advanced filters on load
          */
         advancedFilterCollapsed: false,
@@ -120,7 +126,7 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
         return new Promise(function (resolve, reject) {
             var promises = [];
             if (this.btnRenderArea) {
-                this.btnRenderArea.add(
+                this.showFiltersBtn = this.btnRenderArea.add(
                     {
                         xtype: 'rallybutton',
                         cls: 'secondary rly-small',
@@ -148,6 +154,7 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
                                 this.tabPanel = this.panelRenderArea.add({
                                     xtype: 'tabpanel',
                                     width: '98%',
+                                    minTabWidth: 100,
                                     plain: true,
                                     autoRender: true,
                                     items: []
@@ -202,7 +209,7 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
                                         itemId: 'clearAllButton',
                                         cls: 'secondary rly-small clear-all-filters-button',
                                         text: 'Clear All',
-                                        margin: '3 9 3 -11',
+                                        margin: '3 9 3 0',
                                         hidden: !this._hasFilters(),
                                         listeners: {
                                             click: this._clearAllFilters,
@@ -212,7 +219,9 @@ Ext.define('Utils.MultiLevelPiAppFilter', {
 
                                     this.btnRenderArea.add(this.clearAllButton);
                                     this.tabPanel.setActiveTab(0);
-                                    this.tabPanel.hide();
+                                    if (this.filtersHidden) {
+                                        this.tabPanel.hide();
+                                    }
 
                                     // Without this, the components are clipped on narrow windows
                                     this.btnRenderArea.setOverflowXY('auto', 'auto');
