@@ -382,7 +382,7 @@ text.collapse-arrow {
 .today-line {
   stroke-dasharray: 5, 5;
   stroke: #2c2cd8;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 
 .today-line-hover {
@@ -394,7 +394,7 @@ text.collapse-arrow {
 .iteration-line {
   stroke-dasharray: 15, 2;
   stroke: #000000;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 
 .iteration-line-hover {
@@ -406,7 +406,7 @@ text.collapse-arrow {
 .release-line {
   stroke-dasharray: 20, 4;
   stroke: #000000;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 
 .release-line-hover {
@@ -418,7 +418,7 @@ text.collapse-arrow {
 .milestone-line {
   stroke-dasharray: 10, 4;
   stroke: #000000;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 
 .milestone-line-hover {

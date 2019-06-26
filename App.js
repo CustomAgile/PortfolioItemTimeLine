@@ -320,13 +320,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         `Start Date: ${Rally.util.DateTime.format(d.get('StartDate'), 'm-d-y')}`,
                         `End Date: ${Rally.util.DateTime.format(d.get('EndDate'), 'm-d-y')}`
                     ];
-                    let tipId = `tooltip-iteration-line`;
+                    let tipId = 'tooltip-iteration-line';
 
                     gApp._addHoverTooltip(this, 'iteration-line-hover', tipId, tipText, 160, 60);
                 })
                 .on('mouseout', function (d) {
                     d3.select(this).attr('class', 'iteration-line');
-                    d3.select(`tooltip-iteration-line`).remove();
+                    d3.select('#tooltip-iteration-line').remove();
                 });
         }
 

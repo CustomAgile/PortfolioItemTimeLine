@@ -1383,13 +1383,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         `Start Date: ${Rally.util.DateTime.format(d.get('StartDate'), 'm-d-y')}`,
                         `End Date: ${Rally.util.DateTime.format(d.get('EndDate'), 'm-d-y')}`
                     ];
-                    let tipId = `tooltip-iteration-line`;
+                    let tipId = 'tooltip-iteration-line';
 
                     gApp._addHoverTooltip(this, 'iteration-line-hover', tipId, tipText, 160, 60);
                 })
                 .on('mouseout', function (d) {
                     d3.select(this).attr('class', 'iteration-line');
-                    d3.select(`tooltip-iteration-line`).remove();
+                    d3.select('#tooltip-iteration-line').remove();
                 });
         }
 
@@ -1564,9 +1564,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
             }
 
             gApp._setAxisDateFields(startDate, endDate);
-
-            //gApp._setTimeScaler(startDate, endDate);
-            //gApp._rescaledStart();
         }
     },
 
@@ -1578,7 +1575,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _getSVGHeight: function () {
-        return parseInt(d3.select('#rootSurface').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0); // - (gApp.getSetting('showReleases') ? gApp._rowHeight : 0)
+        return parseInt(d3.select('#rootSurface').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0);
     },
 
     _setSVGDimensions: function (nodetree) {
@@ -2326,7 +2323,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
     _onFilterChange: function (filters) {
         gApp.advFilters = filters;
         gApp._updateFilterTabText();
-        //console.log(filters);
 
         // If user clears filters, update timeline, otherwise store the added filter
         if (gApp._hasFilters()) { gApp.down('#applyFiltersBtn').setDisabled(false); }
@@ -2367,11 +2363,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return hasFilters;
     },
 
-    // _onTargetFilterChange: function (combobox, newValue) {
-    //     gApp.filterOrdinal = newValue;
-    //     gApp.down('#applyFiltersBtn').setDisabled(false);
-    // },
-
     _onTypeChange: function () {
         gApp._refreshTimeline();
     },
@@ -2402,8 +2393,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
             gApp.ancestorFilterPlugin.piSelector.queryDelay = 1250;
         }
 
-        // var scopeSelector = gApp.down('#ignoreScopeControl');
-
         gApp._removeSVGTree();
         gApp._clearNodes();
 
@@ -2430,18 +2419,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
         new Promise(function (resolve, reject) {
             if (gApp._isAncestorSelected()) {
-                // Allow setting project scoping for a single ancestor
-                // if (scopeSelector) {
-                //     if (scopeSelector.getStore().getItems().length !== 2) {
-                //         scopeSelector.getStore().loadData([{
-                //             text: "Current Project(s)",
-                //             value: false
-                //         }, {
-                //             text: "Any Project",
-                //             value: true
-                //         }], false);
-                //     }
-                // }
 
                 // Ancestor plugin gives us the ref and typepath, so we need to fetch
                 // the actual record before proceeding
@@ -2461,16 +2438,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
             }
             // No ancestor selected, load all PIs starting at selected type
             else {
-                // For multiple ancestors only allow scoping to current project(s)
-                // if (scopeSelector) {
-                //     if (scopeSelector.getStore().getItems().length !== 1) {
-                //         scopeSelector.getStore().loadData([{
-                //             text: "Current Project(s)",
-                //             value: false
-                //         }], false);
-                //     }
-                // }
-
                 var topType = gApp._getSelectedAncestorType();
                 if (topType) {
                     gApp.expandData[0].expanded = false;
@@ -2504,22 +2471,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
         var childTypes = gApp._getTypeList(gApp._highestOrdinal() - 1);
         var childModels = [];
         _.each(childTypes, function (model) { childModels.push(model.Type); });
-
-        //if (gApp.ancestorFilterPlugin.piTypeSelector) {
-        // gApp.ancestorFilterPlugin.piTypeSelector.on('select', gApp._refreshTimeline); // TODO
-        //}
-
-        // var scopeSelector = gApp.down('#ignoreScopeControl');
-
-        // if (scopeSelector) {
-        //     scopeSelector.setForceSelection(true);
-        //     if (!gApp.ancestorFilterPlugin._getValue().pi) {
-        //         scopeSelector.getStore().loadData([{
-        //             text: "Current Project(s)",
-        //             value: false
-        //         }], false);
-        //     }
-        // }
 
         var fontStyle = 'font-size: 13px; font-family:ProximaNova,Helvetica,Arial';
 
@@ -2621,8 +2572,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         items: [
                             {
                                 xtype: 'fieldcontainer',
-                                //fieldLabel: 'Overlays',
-                                //labelAlign: 'top',
                                 layout: {
                                     type: 'vbox'
                                 },
@@ -2702,50 +2651,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
                             }
                         ]
                     },
-                    // {
-                    //     xtype: 'rallycheckboxfield',
-                    //     itemId: 'showDependenciesCheckbox',
-                    //     fieldLabel: 'Dependency Strings',
-                    //     labelStyle: 'font-size: 12px',
-                    //     labelWidth: 80,
-                    //     labelSeparator: '',
-                    //     name: 'showDependencies',
-                    //     value: false,
-                    //     handler: gApp._rescaledStart,
-                    //     margin: '0 20 0 0'
-                    // },
-                    // {
-                    //     xtype: 'rallymultiobjectpicker',
-                    //     itemId: 'gridlineChooser',
-                    //     stateful: true,
-                    //     stateId: this.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.projectScopeControl'),
-                    //     stateEvents: ['select'],
-                    //     displayField: 'text',
-                    //     valueField: 'value',
-                    //     fieldLabel: 'Show gridlines for',
-                    //     storeConfig: {
-                    //         fields: ['text', 'value'],
-                    //         data: [{
-                    //             text: "Dates",
-                    //             value: false
-                    //         }, {
-                    //             text: "Iterations",
-                    //             value: true
-                    //         }, {
-                    //             text: "Releases",
-                    //             value: true
-                    //         }, {
-                    //             text: "Milestones",
-                    //             value: true
-                    //         }]
-                    //     },
-                    //     listeners: {
-                    //         scope: this,
-                    //         change: function () {
-                    //             this._onGridlinesChanged();
-                    //         }
-                    //     },
-                    // },
                     {
                         xtype: 'text',
                         text: 'EXPORT',
@@ -2760,16 +2665,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         height: 22,
                         toolTipText: 'Export Timeline...',
                         handler: gApp._exportTimeline
-                    },
-
-                    // {
-                    //     xtype: 'rallymultiobjectpicker',
-                    //     fieldLabel: 'Show gridlines for',
-                    //     labelStyle: 'font-size: 12px',
-                    //     labelWidth: 80,
-                    //     labelSeparator: '',
-                    //     handler: gApp._rescaledStart,
-                    // }
+                    }
                 ]
             });
 
@@ -21018,7 +20914,7 @@ text.collapse-arrow {
 .today-line {
   stroke-dasharray: 5, 5;
   stroke: #2c2cd8;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 .today-line-hover {
   stroke-dasharray: 5, 5;
@@ -21028,7 +20924,7 @@ text.collapse-arrow {
 .iteration-line {
   stroke-dasharray: 15, 2;
   stroke: #000000;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 .iteration-line-hover {
   stroke-dasharray: 15, 2;
@@ -21038,7 +20934,7 @@ text.collapse-arrow {
 .release-line {
   stroke-dasharray: 20, 4;
   stroke: #000000;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 .release-line-hover {
   stroke-dasharray: 20, 4;
@@ -21048,7 +20944,7 @@ text.collapse-arrow {
 .milestone-line {
   stroke-dasharray: 10, 4;
   stroke: #000000;
-  stroke-width: 3;
+  stroke-width: 2;
 }
 .milestone-line-hover {
   stroke-dasharray: 10, 4;
