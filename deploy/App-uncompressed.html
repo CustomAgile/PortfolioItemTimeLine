@@ -1069,10 +1069,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         tlAfter: 90,  //Half a year approx
         tlBack: 120, //How many days before today.
         defaultSettings: {
-            includeAncestor: true,
-            //showReleases: true,
             hideArchived: true,
-            //showFilter: true,
             lineSize: 40,
             cardHover: true
         }
@@ -1083,29 +1080,11 @@ Ext.define('Utils.AncestorPiAppFilter', {
     getSettingsFields: function () {
         var returned = [
             {
-                name: 'includeAncestor',
-                xtype: 'rallycheckboxfield',
-                fieldLabel: 'Include ancestor in timeline',
-                labelAlign: 'top'
-            },
-            // {
-            //     name: 'showReleases',
-            //     xtype: 'rallycheckboxfield',
-            //     fieldLabel: 'Show Releases at top',
-            //     labelAlign: 'top'
-            // },
-            {
                 name: 'hideArchived',
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Hide Archived',
                 labelAlign: 'top'
             },
-            // {
-            //     xtype: 'rallycheckboxfield',
-            //     fieldLabel: 'Show Advanced filter',
-            //     name: 'showFilter',
-            //     labelAlign: 'top'
-            // },
             {
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Allow card pop-up on hover',
@@ -1302,7 +1281,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             });
             gApp._rescaledStart();
         } else {
-            for (let i = 0; i < gApp._getSelectedAncestorTypeOrdinal(); i++) {
+            for (let i = 0; i < gApp._getTopLevelTypeOrdinal(); i++) {
                 d3.selectAll('.collapse-icon').dispatch('expandAll');
                 gApp._rescaledStart();
             }
@@ -1695,7 +1674,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
             // Release Name
             releases.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2); })
+                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
                 .attr('y', gApp._rowHeight / 4 + 3)
                 .text(function (d) { return d.get('Name'); });
 
@@ -1722,7 +1701,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
             // Release Name
             iterations.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2); })
+                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
                 .attr('y', gApp._rowHeight / 4 + 3)
                 .text(function (d) { return d.get('Name'); });
 
@@ -2484,7 +2463,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             }
             // No ancestor selected, load all PIs starting at selected type
             else {
-                var topType = gApp._getSelectedAncestorType();
+                var topType = gApp._getTopLevelType();
                 if (topType) {
                     gApp.expandData[0].expanded = false;
                     gApp._getArtifacts(topType, resolve, reject);
@@ -2658,7 +2637,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                                         itemId: 'releasesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        //checked: false,
+                                        checked: true,
                                         id: 'releasesCheckbox',
                                         handler: gApp._rescaledStart,
                                         stateful: true,
@@ -2899,7 +2878,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         var toDelete = true;
         var currentOrd = gApp._getLowestFilteredOrdinal();
         if (currentOrd === 0) { currentOrd++; }
-        var maxOrd = gApp._getSelectedAncestorTypeOrdinal() - (gApp._isAncestorSelected() ? 1 : 0);
+        var maxOrd = (gApp._isAncestorSelected() ? gApp._getAncestorTypeOrdinal() - 1 : gApp._getTopLevelTypeOrdinal());
         while (currentOrd <= maxOrd) {
             _.each(gApp._nodes, function (currentNode) {
                 if (currentNode.Name !== 'root' && currentNode.record.id !== 'root' && currentNode.record.get('PortfolioItemType').Ordinal === currentOrd) {
@@ -3149,24 +3128,28 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return typeRecord;
     },
 
-    _getSelectedAncestorTypeOrdinal: function () {
-        var type = gApp._getSelectedAncestorType();
+    _getTopLevelTypeOrdinal: function () {
+        var type = gApp._getTopLevelType();
         return type ? type.get('Ordinal') : 0;
     },
 
-    _getSelectedAncestorTypePath: function () {
+    _getTopLevelTypePath: function () {
         return gApp.down('#piTypeCombobox').getValue();
         //return gApp.ancestorFilterPlugin._getValue().piTypePath;
     },
 
-    _getSelectedAncestorType: function () {
-        var typePath = gApp._getSelectedAncestorTypePath();
+    _getTopLevelType: function () {
+        var typePath = gApp._getTopLevelTypePath();
         var type = _.find(gApp._typeStore, function (thisType) { return thisType.get('TypePath') === typePath; });
         return type;
     },
 
     _isAncestorSelected: function () {
-        return gApp.ancestorFilterPlugin._getValue().pi;
+        return !!gApp.ancestorFilterPlugin._getValue().pi;
+    },
+
+    _getAncestorTypeOrdinal() {
+        return gApp._getOrdFromModel(gApp.ancestorFilterPlugin._getValue().piTypePath);
     },
 
     _getTypeList: function (highestOrdinal) {
@@ -3217,8 +3200,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _shouldShowRoot() {
-        if (!gApp._isAncestorSelected()) { return false; }
-        else { return gApp.getSetting('includeAncestor'); }
+        return gApp._isAncestorSelected();
     },
 
     _getNodeTreeId: function (d) {
@@ -3612,7 +3594,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     afterrender: function (tooltip) {
                         Ext.create('Rally.ui.tooltip.ToolTip', {
                             target: (tooltip.labelEl && tooltip.labelEl.dom.children.length && tooltip.labelEl.dom.children[0]) || tooltip.labelEl,
-                            html: '<div>When scoping across all projects, top level results limited to 75 rows</div>',
+                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results limited to 75 rows</p></div>',
                             itemId: 'scopeTip',
                             id: 'scopeTip',
                             showDelay: 200
@@ -20910,11 +20892,6 @@ circle.no--errors {
 .axis path {
   display: none;
 }
-.axis line {
-  stroke-opacity: 0.17;
-  shape-rendering: crispEdges;
-  stroke: #000;
-}
 #Utils.AncestorPiAppFilter.piType-labelEl,
 #ignoreScopeControl-labelEl {
   margin-top: 0;
@@ -20970,10 +20947,15 @@ text.collapse-arrow {
   fill: white;
   font-size: 1.1em;
 }
+.axis line {
+  stroke-opacity: 0.17;
+  shape-rendering: crispEdges;
+  stroke: #000;
+}
 .today-line {
   stroke-dasharray: 5, 5;
   stroke: #2c2cd8;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 .today-line-hover {
   stroke-dasharray: 5, 5;
@@ -20983,7 +20965,7 @@ text.collapse-arrow {
 .iteration-line {
   stroke-dasharray: 15, 2;
   stroke: #000000;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 .iteration-line-hover {
   stroke-dasharray: 15, 2;
@@ -20993,7 +20975,7 @@ text.collapse-arrow {
 .release-line {
   stroke-dasharray: 20, 4;
   stroke: #000000;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 .release-line-hover {
   stroke-dasharray: 20, 4;
@@ -21003,7 +20985,7 @@ text.collapse-arrow {
 .milestone-line {
   stroke-dasharray: 10, 4;
   stroke: #000000;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 .milestone-line-hover {
   stroke-dasharray: 10, 4;

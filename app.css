@@ -306,11 +306,6 @@ circle.no--errors {
   display: none;
 }
 
-.axis line {
-  stroke-opacity: 0.17;
-  shape-rendering: crispEdges;
-  stroke: #000;
-}
 
 #Utils.AncestorPiAppFilter.piType-labelEl, #ignoreScopeControl-labelEl {
   margin-top: 0;
@@ -379,10 +374,16 @@ text.collapse-arrow {
   font-size: 1.1em;
 }
 
+.axis line {
+  stroke-opacity: 0.17;
+  shape-rendering: crispEdges;
+  stroke: #000;
+}
+
 .today-line {
   stroke-dasharray: 5, 5;
   stroke: #2c2cd8;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 
 .today-line-hover {
@@ -394,7 +395,7 @@ text.collapse-arrow {
 .iteration-line {
   stroke-dasharray: 15, 2;
   stroke: #000000;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 
 .iteration-line-hover {
@@ -406,7 +407,7 @@ text.collapse-arrow {
 .release-line {
   stroke-dasharray: 20, 4;
   stroke: #000000;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 
 .release-line-hover {
@@ -418,7 +419,7 @@ text.collapse-arrow {
 .milestone-line {
   stroke-dasharray: 10, 4;
   stroke: #000000;
-  stroke-width: 2;
+  stroke-width: 1;
 }
 
 .milestone-line-hover {

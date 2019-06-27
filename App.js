@@ -6,10 +6,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         tlAfter: 90,  //Half a year approx
         tlBack: 120, //How many days before today.
         defaultSettings: {
-            includeAncestor: true,
-            //showReleases: true,
             hideArchived: true,
-            //showFilter: true,
             lineSize: 40,
             cardHover: true
         }
@@ -20,29 +17,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     getSettingsFields: function () {
         var returned = [
             {
-                name: 'includeAncestor',
-                xtype: 'rallycheckboxfield',
-                fieldLabel: 'Include ancestor in timeline',
-                labelAlign: 'top'
-            },
-            // {
-            //     name: 'showReleases',
-            //     xtype: 'rallycheckboxfield',
-            //     fieldLabel: 'Show Releases at top',
-            //     labelAlign: 'top'
-            // },
-            {
                 name: 'hideArchived',
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Hide Archived',
                 labelAlign: 'top'
             },
-            // {
-            //     xtype: 'rallycheckboxfield',
-            //     fieldLabel: 'Show Advanced filter',
-            //     name: 'showFilter',
-            //     labelAlign: 'top'
-            // },
             {
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Allow card pop-up on hover',
@@ -239,7 +218,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
             gApp._rescaledStart();
         } else {
-            for (let i = 0; i < gApp._getSelectedAncestorTypeOrdinal(); i++) {
+            for (let i = 0; i < gApp._getTopLevelTypeOrdinal(); i++) {
                 d3.selectAll('.collapse-icon').dispatch('expandAll');
                 gApp._rescaledStart();
             }
@@ -632,7 +611,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
             // Release Name
             releases.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2); })
+                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
                 .attr('y', gApp._rowHeight / 4 + 3)
                 .text(function (d) { return d.get('Name'); });
 
@@ -659,7 +638,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
             // Release Name
             iterations.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2); })
+                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
                 .attr('y', gApp._rowHeight / 4 + 3)
                 .text(function (d) { return d.get('Name'); });
 
@@ -1421,7 +1400,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
             // No ancestor selected, load all PIs starting at selected type
             else {
-                var topType = gApp._getSelectedAncestorType();
+                var topType = gApp._getTopLevelType();
                 if (topType) {
                     gApp.expandData[0].expanded = false;
                     gApp._getArtifacts(topType, resolve, reject);
@@ -1595,7 +1574,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                         itemId: 'releasesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        //checked: false,
+                                        checked: true,
                                         id: 'releasesCheckbox',
                                         handler: gApp._rescaledStart,
                                         stateful: true,
@@ -1836,7 +1815,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var toDelete = true;
         var currentOrd = gApp._getLowestFilteredOrdinal();
         if (currentOrd === 0) { currentOrd++; }
-        var maxOrd = gApp._getSelectedAncestorTypeOrdinal() - (gApp._isAncestorSelected() ? 1 : 0);
+        var maxOrd = (gApp._isAncestorSelected() ? gApp._getAncestorTypeOrdinal() - 1 : gApp._getTopLevelTypeOrdinal());
         while (currentOrd <= maxOrd) {
             _.each(gApp._nodes, function (currentNode) {
                 if (currentNode.Name !== 'root' && currentNode.record.id !== 'root' && currentNode.record.get('PortfolioItemType').Ordinal === currentOrd) {
@@ -2086,24 +2065,28 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return typeRecord;
     },
 
-    _getSelectedAncestorTypeOrdinal: function () {
-        var type = gApp._getSelectedAncestorType();
+    _getTopLevelTypeOrdinal: function () {
+        var type = gApp._getTopLevelType();
         return type ? type.get('Ordinal') : 0;
     },
 
-    _getSelectedAncestorTypePath: function () {
+    _getTopLevelTypePath: function () {
         return gApp.down('#piTypeCombobox').getValue();
         //return gApp.ancestorFilterPlugin._getValue().piTypePath;
     },
 
-    _getSelectedAncestorType: function () {
-        var typePath = gApp._getSelectedAncestorTypePath();
+    _getTopLevelType: function () {
+        var typePath = gApp._getTopLevelTypePath();
         var type = _.find(gApp._typeStore, function (thisType) { return thisType.get('TypePath') === typePath; });
         return type;
     },
 
     _isAncestorSelected: function () {
-        return gApp.ancestorFilterPlugin._getValue().pi;
+        return !!gApp.ancestorFilterPlugin._getValue().pi;
+    },
+
+    _getAncestorTypeOrdinal() {
+        return gApp._getOrdFromModel(gApp.ancestorFilterPlugin._getValue().piTypePath);
     },
 
     _getTypeList: function (highestOrdinal) {
@@ -2154,8 +2137,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _shouldShowRoot() {
-        if (!gApp._isAncestorSelected()) { return false; }
-        else { return gApp.getSetting('includeAncestor'); }
+        return gApp._isAncestorSelected();
     },
 
     _getNodeTreeId: function (d) {
@@ -2549,7 +2531,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     afterrender: function (tooltip) {
                         Ext.create('Rally.ui.tooltip.ToolTip', {
                             target: (tooltip.labelEl && tooltip.labelEl.dom.children.length && tooltip.labelEl.dom.children[0]) || tooltip.labelEl,
-                            html: '<div>When scoping across all projects, top level results limited to 75 rows</div>',
+                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results limited to 75 rows</p></div>',
                             itemId: 'scopeTip',
                             id: 'scopeTip',
                             showDelay: 200
