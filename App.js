@@ -7,8 +7,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         tlBack: 120, //How many days before today.
         defaultSettings: {
             includeAncestor: true,
-            showTimeLine: true,
-            showReleases: true,
+            //showReleases: true,
             hideArchived: true,
             //showFilter: true,
             lineSize: 40,
@@ -26,18 +25,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 fieldLabel: 'Include ancestor in timeline',
                 labelAlign: 'top'
             },
-            {
-                name: 'showTimeLine',
-                xtype: 'rallycheckboxfield',
-                fieldLabel: 'Show dates at top',
-                labelAlign: 'top'
-            },
-            {
-                name: 'showReleases',
-                xtype: 'rallycheckboxfield',
-                fieldLabel: 'Show Releases at top',
-                labelAlign: 'top'
-            },
+            // {
+            //     name: 'showReleases',
+            //     xtype: 'rallycheckboxfield',
+            //     fieldLabel: 'Show Releases at top',
+            //     labelAlign: 'top'
+            // },
             {
                 name: 'hideArchived',
                 xtype: 'rallycheckboxfield',
@@ -287,14 +280,16 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _setAxis: function () {
         if (gApp.gX) { gApp.gX.remove(); }
-        var topPadding = (gApp.getSetting('showReleases') && gApp.releases) ? 47 : 20;
+        var showCalendarTicks = gApp.down('#calendarDatesCheckbox').getValue();
+        var topPadding = gApp.down('#releasesCheckbox').getValue() ? 60 : 20;
+        topPadding += gApp.down('#iterationsCheckbox').getValue() ? 40 : 0;
         var svg = d3.select('#rootSurface');
         var width = +svg.attr('width');
         var height = +svg.attr('height');
         gApp.xAxis = d3.axisBottom(gApp.dateScaler)
             .ticks()
-            .tickSize(height)
-            .tickPadding(gApp.getSetting('showTimeLine') ? (8 - height) : 0);
+            .tickSize(showCalendarTicks ? height : 0)
+            .tickPadding(showCalendarTicks ? 22 - height : 22);
         gApp.gX = svg.append('g');
         gApp.gX.attr('transform', 'translate(' + gApp._rowHeight + ',0)')
             .attr('id', 'axisBox')
@@ -303,7 +298,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('class', 'axis')
             .call(gApp.xAxis);
 
-        d3.selectAll('.tick line').attr('y1', topPadding);
+        if (showCalendarTicks) {
+            d3.selectAll('.tick line').attr('y1', topPadding);
+        }
 
         if (gApp.iterations && gApp.iterations.length && gApp.down('#iterationsCheckbox').getValue()) {
             gApp.gX.selectAll('iterationticks')
@@ -330,7 +327,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 });
         }
 
-        if (gApp.releases && gApp.releases.length && gApp.down('#releasesCheckbox').getValue()) {
+        if (gApp.down('#releasesCheckbox').getValue()) {
             gApp.gX.selectAll('releaseticks')
                 .data(gApp.releases)
                 .enter().append('line')
@@ -512,12 +509,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _getSVGHeight: function () {
-        return parseInt(d3.select('#rootSurface').attr('height')) - (gApp.getSetting('showTimeLine') ? gApp._rowHeight : 0);
+        return parseInt(d3.select('#rootSurface').attr('height')) - gApp._rowHeight;
     },
 
     _setSVGDimensions: function (nodetree) {
         var svg = d3.select('#rootSurface');
-        svg.attr('height', gApp._rowHeight * (nodetree.value + (gApp.getSetting('showTimeLine') ? 1 : 0) + (gApp.getSetting('showReleases') ? 1 : 0)));
+        svg.attr('height', gApp._rowHeight * (nodetree.value + 1 + (gApp.down('#releasesCheckbox').getValue() ? 1 : 0) + (gApp.down('#iterationsCheckbox').getValue() ? 1 : 0)));
         //Make surface the size available in the viewport (minus the selectors and margins)
         var rs = gApp.down('#rootSurface');
         rs.getEl().setHeight(svg.attr('height'));
@@ -537,6 +534,20 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return rClass;
     },
 
+    _initIterationTranslate: function (d) {
+        d.startX = new Date(d.get('StartDate'));
+        d.endX = new Date(d.get('EndDate'));
+
+        var x = gApp.dateScaler(d.startX);
+        var e = gApp.dateScaler(d.endX);
+
+        d.drawnX = x;
+        d.drawnY = -gApp._rowHeight / 1.5;
+        d.drawnWidth = e - d.drawnX;
+        d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
+        d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
+    },
+
     _initReleaseTranslate: function (d) {
         d.startX = new Date(d.get('ReleaseStartDate'));
         d.endX = new Date(d.get('ReleaseDate'));
@@ -545,7 +556,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var e = gApp.dateScaler(d.endX);
 
         d.drawnX = x;
-        d.drawnY = -gApp._rowHeight / 1.5;
+        d.drawnY = -(gApp._rowHeight / 1.5) - (gApp.down('#iterationsCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0);
         d.drawnWidth = e - d.drawnX;
         d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
         d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
@@ -591,7 +602,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .enter().append('g')
             .append('text')
             .attr('x', -20)
-            .attr('y', -40)
+            .attr('y', -15 - (gApp.down('#releasesCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0) - (gApp.down('#iterationsCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0))
             .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
             .attr('alignment-baseline', 'central')
             .text(function (d) { return d.expanded ? '9' : '7'; })
@@ -600,7 +611,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
             });
 
-        if (gApp.getSetting('showReleases') && gApp.releases) {
+        if (gApp.down('#releasesCheckbox').getValue()) {
             var releases = d3.select('#zoomTree').selectAll(".releaseNode")
                 .data(gApp.releases)
                 .enter().append("g")
@@ -621,7 +632,34 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
             // Release Name
             releases.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2; })
+                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2); })
+                .attr('y', gApp._rowHeight / 4 + 3)
+                .text(function (d) { return d.get('Name'); });
+
+        }
+
+        if (gApp.down('#iterationsCheckbox').getValue()) {
+            var iterations = d3.select('#zoomTree').selectAll(".iterationNode")
+                .data(gApp.iterations)
+                .enter().append("g")
+                .attr('class', 'iterationNode')
+                .attr('id', function (d) { return 'iteration-' + d.get('Name'); })
+                .attr('transform', function (d) {
+                    gApp._initIterationTranslate(d);
+                    return d.translate;
+                });
+
+            // Release bars
+            iterations.append('rect')
+                .attr('width', function (d) { return d.drawnWidth; })
+                .attr('height', gApp._rowHeight / 2)
+                .attr('fill', '#f2f2f2')
+                .attr('stroke', '#808080')
+                .attr('stroke-opacity', 0.5);
+
+            // Release Name
+            iterations.append('text')
+                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2); })
                 .attr('y', gApp._rowHeight / 4 + 3)
                 .text(function (d) { return d.get('Name'); });
 
@@ -1342,7 +1380,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         await gApp._getDefaultProjectID();
 
-        if (gApp.getSetting('showReleases') && !gApp.releases) {
+        if (!gApp.releases) {
             await gApp._getReleases();
         }
 
@@ -1496,7 +1534,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     },
                     {
                         xtype: 'panel',
-                        title: 'Overlays',
+                        title: 'GRIDLINES & OVERLAYS',
                         titleAlign: 'center',
                         titleCollapse: true,
                         collapsible: true,
@@ -1515,19 +1553,31 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                 labelStyle: fontStyle,
                                 labelSeparator: '',
                                 labelWidth: 0,
-                                width: 90,
+                                width: 95,
                                 margin: 5,
                                 defaultType: 'checkboxfield',
                                 border: 0,
                                 items: [
                                     {
+                                        boxLabel: 'Calendar dates',
+                                        itemId: 'calendarDatesCheckbox',
+                                        name: 'overlayCheckboxes',
+                                        inputValue: true,
+                                        checked: true,
+                                        id: 'calendarDatesCheckbox',
+                                        handler: gApp._setAxis,
+                                        stateful: true,
+                                        stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showCalendarDateOverlays'),
+                                        stateEvents: ['change'],
+                                    },
+                                    {
                                         boxLabel: 'Iterations',
                                         itemId: 'iterationsCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        checked: false,
+                                        // checked: false,
                                         id: 'iterationsCheckbox',
-                                        handler: gApp._setAxis,
+                                        handler: gApp._rescaledStart,
                                         stateful: true,
                                         stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showIterationOverlays'),
                                         stateEvents: ['change'],
@@ -1537,9 +1587,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                         itemId: 'releasesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        checked: false,
+                                        //checked: false,
                                         id: 'releasesCheckbox',
-                                        handler: gApp._setAxis,
+                                        handler: gApp._rescaledStart,
                                         stateful: true,
                                         stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showReleaseOverlays'),
                                         stateEvents: ['change'],
@@ -1565,7 +1615,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                         itemId: 'milestonesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        checked: false,
+                                        //checked: false,
                                         id: 'milestonesCheckbox',
                                         handler: gApp._setAxis,
                                         stateful: true,
@@ -1577,7 +1627,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                         itemId: 'showDependenciesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        checked: false,
+                                        //checked: false,
                                         id: 'showDependenciesCheckbox',
                                         handler: gApp._setAxis,
                                         stateful: true,
@@ -2147,7 +2197,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _addSVGTree: function () {
         var svg = d3.select('#rootSurface');
         svg.append("g")
-            .attr("transform", "translate(" + gApp._rowHeight + "," + ((gApp.getSetting('showTimeLine') ? gApp._rowHeight / 1.5 : 0) + (gApp.getSetting('showReleases') ? gApp._rowHeight / 1.5 : 0)) + ")")
+            .attr("transform", "translate(" + gApp._rowHeight + "," + (gApp._rowHeight + (gApp.down('#releasesCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0) + (gApp.down('#iterationsCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0)) + ")")
             .attr("id", "zoomTree")
             .attr('width', +svg.attr('width') - gApp._rowHeight)
             .attr('height', +svg.attr('height'))
