@@ -2345,6 +2345,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _onAncestorFilterChange: function () {
+        gApp._updateAncestorTabText();
         gApp._refreshTimeline();
     },
 
@@ -2383,6 +2384,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
         var titleText = totalFilters ? `FILTERS (${totalFilters})` : 'FILTERS';
         var tab = gApp.tabPanel.child('#chartFiltersTab');
+
+        if (tab) { tab.setTitle(titleText); }
+    },
+
+    _updateAncestorTabText: function () {
+        var titleText = gApp._isAncestorSelected() ? 'ANCESTOR CHOOSER (*)' : 'ANCESTOR CHOOSER';
+        var tab = gApp.tabPanel.child(`#${Utils.AncestorPiAppFilter.RENDER_AREA_ID}`);
 
         if (tab) { tab.setTitle(titleText); }
     },
@@ -2721,6 +2729,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
         gApp.ready = true;
         gApp._updateFilterTabText();
+        gApp._updateAncestorTabText();
         gApp._refreshTimeline();
     },
 

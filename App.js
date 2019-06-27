@@ -1282,6 +1282,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _onAncestorFilterChange: function () {
+        gApp._updateAncestorTabText();
         gApp._refreshTimeline();
     },
 
@@ -1320,6 +1321,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         var titleText = totalFilters ? `FILTERS (${totalFilters})` : 'FILTERS';
         var tab = gApp.tabPanel.child('#chartFiltersTab');
+
+        if (tab) { tab.setTitle(titleText); }
+    },
+
+    _updateAncestorTabText: function () {
+        var titleText = gApp._isAncestorSelected() ? 'ANCESTOR CHOOSER (*)' : 'ANCESTOR CHOOSER';
+        var tab = gApp.tabPanel.child(`#${Utils.AncestorPiAppFilter.RENDER_AREA_ID}`);
 
         if (tab) { tab.setTitle(titleText); }
     },
@@ -1658,6 +1666,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         gApp.ready = true;
         gApp._updateFilterTabText();
+        gApp._updateAncestorTabText();
         gApp._refreshTimeline();
     },
 
