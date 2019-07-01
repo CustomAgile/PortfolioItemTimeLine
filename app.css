@@ -1,3 +1,8 @@
+.x-panel-header-default-top {
+  -webkit-box-shadow: none;
+  box-shadow: none;
+}
+
 .tree-arrow {
   fill: grey;
 }

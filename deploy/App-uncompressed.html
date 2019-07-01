@@ -1071,7 +1071,12 @@ Ext.define('Utils.AncestorPiAppFilter', {
         defaultSettings: {
             hideArchived: true,
             lineSize: 40,
-            cardHover: true
+            cardHover: true,
+            calendarOverlay: false,
+            iterationOverlay: false,
+            releaseOverlay: true,
+            milestoneOverlay: false,
+            dependencyOverlay: false,
         }
     },
 
@@ -1079,25 +1084,87 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     getSettingsFields: function () {
         var returned = [
+            // {
+            //     xtype: 'panel',
+            //     title: 'Default Overlays & Gridlines',
+            //     width: 240,
+            //     items: [
+
+            //   ]
+            //},
             {
                 name: 'hideArchived',
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Hide Archived',
-                labelAlign: 'top'
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
             },
             {
                 xtype: 'rallycheckboxfield',
                 fieldLabel: 'Allow card pop-up on hover',
                 name: 'cardHover',
-                labelAlign: 'top'
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
             },
             {
                 xtype: 'rallynumberfield',
                 fieldLabel: 'Grid bar width',
                 name: 'lineSize',
                 minValue: 15,
-                labelAlign: 'top'
-            }
+                labelAlign: 'left',
+                width: 350,
+                labelWidth: 200
+            },
+            {
+                xtype: 'text',
+                text: 'Default Overlays & Gridlines:',
+                margin: '20 0 10 0',
+                style: 'font-size:12px;',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'calendarOverlay',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Calendar Lines',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'iterationOverlay',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Iterations',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'releaseOverlay',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Releases',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'milestoneOverlay',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Milestones',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'dependencyOverlay',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Dependencies',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
 
         ];
         return returned;
@@ -1323,8 +1390,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
     _setAxis: function () {
         if (gApp.gX) { gApp.gX.remove(); }
         var showCalendarTicks = gApp.down('#calendarDatesCheckbox').getValue();
-        var topPadding = gApp.down('#releasesCheckbox').getValue() ? 60 : 20;
-        topPadding += gApp.down('#iterationsCheckbox').getValue() ? 40 : 0;
+        var topPadding = 35;
+        topPadding += gApp.down('#releasesCheckbox').getValue() ? 25 : 0;
+        topPadding += gApp.down('#iterationsCheckbox').getValue() ? 26 : 0;
+        //topPadding += (gApp.down('#releasesCheckbox').getValue() && gApp.down('#iterationsCheckbox').getValue()) ? 6 : 0;
         var svg = d3.select('#rootSurface');
         var width = +svg.attr('width');
         var height = +svg.attr('height');
@@ -1643,7 +1712,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             .data(gApp.expandData)
             .enter().append('g')
             .append('text')
-            .attr('x', -20)
+            .attr('x', -25)
             .attr('y', -15 - (gApp.down('#releasesCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0) - (gApp.down('#iterationsCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0))
             .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
             .attr('alignment-baseline', 'central')
@@ -1801,25 +1870,37 @@ Ext.define('Utils.AncestorPiAppFilter', {
         //     .text(function (d) { return 'Edit ' + d.data.record.get('FormattedID'); });
 
         // PI ID and Name text
-        plannedRows.append('text')
-            .attr('id', function (d) { return 'text-' + d.data.Name; })
-            .attr('x', function (d) { return symbolWidth + 5 - d.plannedDrawnX + (d.depth * 5); })
-            .attr('y', gApp._rowHeight / 4)  //Should follow point size of font
-            .attr('class', 'clickable normalText')
-            .attr('editable', 'none')
-            .attr('alignment-baseline', 'central')
-            .attr('style', 'font-size:12')
-            .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
-            .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
-            .on('click', function (d, idx, arr) {
-                //Browsers get confused over the shift key (think it's 'selectAll')
-                if (d3.event.altKey) {
-                    gApp._dataPanel(d, idx, arr);
-                } else if (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
-                    gApp._setTimeline(d);
-                }
-            })
-            .text(function (d) { return d.data.record.get('FormattedID') + ": " + d.data.record.get('Name'); });
+        if (!gApp.down('#hideLabelsCheckbox').getValue()) {
+            plannedRows.append('text')
+                .attr('id', function (d) { return 'text-' + d.data.Name; })
+                .attr('x', function (d) { return symbolWidth + 5 - d.plannedDrawnX + (d.depth * 5); })
+                .attr('y', gApp._rowHeight / 4)  //Should follow point size of font
+                .attr('class', 'clickable normalText')
+                .attr('editable', 'none')
+                .attr('alignment-baseline', 'central')
+                .attr('style', 'font-size:12')
+                .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
+                .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
+                .on('click', function (d, idx, arr) {
+                    //Browsers get confused over the shift key (think it's 'selectAll')
+                    if (d3.event.altKey) {
+                        gApp._dataPanel(d, idx, arr);
+                    } else if (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
+                        gApp._setTimeline(d);
+                    }
+                })
+                .text(function (d) {
+                    let formattedID = d.data.record.get('FormattedID');
+                    let piName = d.data.record.get('Name');
+                    if (gApp.down('#idOnlyCheckbox').getValue()) {
+                        return formattedID;
+                    }
+                    else if (gApp.down('#shortenLabelsCheckbox').getValue() && piName.length > 20) {
+                        piName = piName.substring(0, 20) + '...';
+                    }
+                    return `${formattedID}: ${piName}`;
+                });
+        }
 
         // Expand / Collapse arrows
         gApp.expandables = d3.selectAll('.children').append('text')
@@ -2355,6 +2436,14 @@ Ext.define('Utils.AncestorPiAppFilter', {
         gApp._refreshTimeline();
     },
 
+    _onRowLabelChange: function (radio, newValue) {
+        // Called twice when selected new radio button
+        // We want to redraw the tree on the second handler
+        // once both radio buttons have finished updating values
+        if (newValue) { return; }
+        gApp._zoomedStart();
+    },
+
     _updateFilterTabText: function () {
         var totalFilters = 0;
         _.each(gApp.advFilters, function (filter) {
@@ -2582,6 +2671,16 @@ Ext.define('Utils.AncestorPiAppFilter', {
                             }
                         ]
                     },
+
+                    {
+                        xtype: 'rallybutton',
+                        text: 'RESET AXIS',
+                        style: fontStyle,
+                        //width: 50,
+                        margin: 0,
+                        itemId: 'resetViewBtn',
+                        handler: gApp._startTreeAgain
+                    },
                     {
                         xtype: 'panel',
                         title: 'GRIDLINES & OVERLAYS',
@@ -2613,36 +2712,27 @@ Ext.define('Utils.AncestorPiAppFilter', {
                                         itemId: 'calendarDatesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        checked: true,
+                                        checked: gApp.getSetting('calendarOverlay'),
                                         id: 'calendarDatesCheckbox',
-                                        handler: gApp._setAxis,
-                                        stateful: true,
-                                        stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showCalendarDateOverlays'),
-                                        stateEvents: ['change'],
+                                        handler: gApp._setAxis
                                     },
                                     {
                                         boxLabel: 'Iterations',
                                         itemId: 'iterationsCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        // checked: false,
+                                        checked: gApp.getSetting('iterationOverlay'),
                                         id: 'iterationsCheckbox',
-                                        handler: gApp._rescaledStart,
-                                        stateful: true,
-                                        stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showIterationOverlays'),
-                                        stateEvents: ['change'],
+                                        handler: gApp._rescaledStart
                                     },
                                     {
                                         boxLabel: 'Releases',
                                         itemId: 'releasesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        checked: true,
+                                        checked: gApp.getSetting('releaseOverlay'),
                                         id: 'releasesCheckbox',
-                                        handler: gApp._rescaledStart,
-                                        stateful: true,
-                                        stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showReleaseOverlays'),
-                                        stateEvents: ['change'],
+                                        handler: gApp._rescaledStart
                                     }
                                 ]
                             },
@@ -2665,28 +2755,80 @@ Ext.define('Utils.AncestorPiAppFilter', {
                                         itemId: 'milestonesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        //checked: false,
+                                        checked: gApp.getSetting('milestoneOverlay'),
                                         id: 'milestonesCheckbox',
-                                        handler: gApp._setAxis,
-                                        stateful: true,
-                                        stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showMilestoneOverlays'),
-                                        stateEvents: ['change'],
+                                        handler: gApp._setAxis
                                     },
                                     {
                                         boxLabel: 'Dependencies',
                                         itemId: 'showDependenciesCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
-                                        //checked: false,
+                                        checked: gApp.getSetting('dependencyOverlay'),
                                         id: 'showDependenciesCheckbox',
-                                        handler: gApp._setAxis,
-                                        stateful: true,
-                                        stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.showDependencyOverlays'),
-                                        stateEvents: ['change'],
+                                        handler: gApp._setAxis
                                     }
                                 ]
                             }
                         ]
+                    },
+                    {
+                        xtype: 'panel',
+                        title: 'ROW LABELS',
+                        titleAlign: 'center',
+                        titleCollapse: true,
+                        collapsible: true,
+                        collapsed: true,
+                        border: false,
+                        width: 120,
+                        items: [{
+                            xtype: 'fieldcontainer',
+                            itemId: 'piLabelGroup',
+                            layout: {
+                                type: 'vbox'
+                            },
+                            labelStyle: fontStyle,
+                            labelSeparator: '',
+                            labelWidth: 0,
+                            width: 110,
+                            margin: 5,
+                            defaultType: 'radiofield',
+                            border: 0,
+                            items: [
+                                {
+                                    boxLabel: 'ID + Name',
+                                    itemId: 'showLabelsCheckbox',
+                                    name: 'piLabelField',
+                                    inputValue: true,
+                                    checked: true,
+                                    handler: gApp._onRowLabelChange
+                                },
+                                {
+                                    boxLabel: 'ID + Short Name',
+                                    itemId: 'shortenLabelsCheckbox',
+                                    name: 'piLabelField',
+                                    inputValue: true,
+                                    checked: false,
+                                    handler: gApp._onRowLabelChange
+                                },
+                                {
+                                    boxLabel: 'ID only',
+                                    itemId: 'idOnlyCheckbox',
+                                    name: 'piLabelField',
+                                    inputValue: true,
+                                    checked: false,
+                                    handler: gApp._onRowLabelChange
+                                },
+                                {
+                                    boxLabel: 'None',
+                                    itemId: 'hideLabelsCheckbox',
+                                    name: 'piLabelField',
+                                    inputValue: true,
+                                    checked: false,
+                                    handler: gApp._onRowLabelChange
+                                }
+                            ]
+                        }]
                     },
                     {
                         xtype: 'text',
@@ -2705,6 +2847,45 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     }
                 ]
             });
+
+        // gApp.tabPanel.child('#viewManagerTab').add(
+        //     {
+        //         xtype: 'container',
+        //         layout: {
+        //             type: 'hbox',
+        //             align: 'middle',
+        //             padding: 10,
+        //             defaultMargins: '0 30 15 0'
+        //         },
+        //         items: [
+        //             // {
+        //             //     xtype: 'rallycombobox',
+        //             //     fieldLabel: 'Load',
+        //             //     handler: gApp._loadView
+        //             // },
+        //             // {
+        //             //     xtype: 'rallysharedviewdialog',
+        //             //     title: 'Shared Views',
+        //             //     enableUrlSharing: true
+        //             // },
+        //             {
+        //                 xtype: 'button',
+        //                 text: "Save View <span style='font-size:12px' class='icon-save'> </span>",
+        //                 handler: gApp._saveView
+        //             },
+        //             {
+        //                 xtype: 'button',
+        //                 text: "Share Current View <span style='font-size:12px' class='icon-share'> </span>",
+        //                 handler: gApp._shareView
+        //             },
+        //             {
+        //                 xtype: 'button',
+        //                 text: "Load a Shared View <span style='font-size:12px' class='icon-load'> </span>",
+        //                 handler: gApp._loadViewUrl
+        //             },
+        //         ]
+        //     }
+        // );
 
         gApp.ready = true;
         gApp._updateFilterTabText();
@@ -3436,6 +3617,41 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return defaultMessage;
     },
 
+    // getCurrentView: function () {
+
+    //     var model = this.getModel();
+    //         return _.map(this.columnConfig.fields, function(field) {
+    //             var modelField = model.getField(field);
+    //             return modelField && modelField.getUUID() || field
+    //         }, this)
+
+
+    //         var view = _.pick(this.getState(), ["columns", "sorters"]);
+    //         return view.columns = _.map(_.filter(view.columns, {
+    //             xtype: "rallyfieldcolumn"
+    //         }), function(c) {
+    //             return _.pick(c, ["dataIndex", "flex"])
+    //         }),
+    //         view
+
+    //         var view = this.getState()
+    //           , gridOrBoard = this.getGridOrBoard();
+    //         return _.isFunction(gridOrBoard.getCurrentView) && Ext.apply(view, gridOrBoard.getCurrentView()),
+    //         _.each(this._getSharedViewProperties(this.plugins.concat(this.sharedViewAdditionalCmps)), function(v) {
+    //             Ext.apply(view, v)
+    //         }),
+    //         view
+
+
+    //         return _.pick(this.getControlCmp().getComponent("inlineFilterButton").getState(), this.sharedViewState)
+
+
+
+    //     return {
+    //         piTypePicker: this.getRecord().get("_refObjectUUID")
+    //     };
+    // },
+
     _addAncestorPlugin: function () {
         gApp.ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
             ptype: 'UtilsAncestorPiAppFilter',
@@ -3602,6 +3818,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     }
                 },
             }
+            // {
+            //     xtype: 'rallysharedviewcombobox',
+            //     title: 'Shared Views',
+            //     enableUrlSharing: true,
+            //     context: gApp.getContext(),
+            //     cmp: gApp
+            // }
         ]);
 
         gApp.tabPanel = gApp.down('#filterBox').add(
@@ -3634,6 +3857,12 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         padding: 10,
                         minHeight: 80
                     }
+                    // {
+                    //     title: 'View Manager',
+                    //     html: '',
+                    //     itemId: 'viewManagerTab',
+                    //     padding: 10
+                    // }
                 ]
             });
 
@@ -20657,7 +20886,11 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 
     <style type="text/css">
-        .tree-arrow {
+        .x-panel-header-default-top {
+  -webkit-box-shadow: none;
+  box-shadow: none;
+}
+.tree-arrow {
   fill: grey;
 }
 .tree-arrow:hover {
