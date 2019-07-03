@@ -1,6 +1,6 @@
 {
   "name": "portfolio-item-timeline",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "devDependencies": {
     "@agile-central-technical-services/utils-ancestor-pi-app-filter": "^2.3.2",

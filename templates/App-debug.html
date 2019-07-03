@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{name}}</title>
+    <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
+    <!--  Build Date: {{newDate}} -->
+    <!--  Version: "{{version}}"-->
+
+    <script type="text/javascript" src="{{{server}}}/apps/{{{sdk}}}/sdk-debug.js"></script>
+    {{#remote_javascript_files}}
+    <script type="text/javascript" src="{{{.}}}"></script>
+    {{/remote_javascript_files}}
+
+    <script type="text/javascript">
+        Rally.loadScripts(
+                [
+                    {{#local_javascript_files}}
+                      "{{{.}}}",
+                    {{/local_javascript_files}}
+                ],
+        function() {
+            Rally.launchApp('{{className}}', {
+                name:"{{name}}",
+                parentRepos:"{{{parents}}}",
+                version:"{{version}}"
+            });
+        }, true);
+    </script>
+
+{{#remote_css_files}}
+    <link rel="stylesheet" type="text/css" href="{{{.}}}"/>
+{{/remote_css_files}}
+
+{{#css_file_names}}
+    <link rel="stylesheet" type="text/css" href="{{{.}}}"/>
+{{/css_file_names}}
+</head>
+<body>
+{{#html_files}}
+    {{{.}}}
+{{/html_files}}
+</body>
+</html>
