@@ -1838,7 +1838,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var topLevelTypePath = gApp.down('#piTypeCombobox').getValue();
 
         // If scoping is set to all projects and we're retrieving the top level PIs
-        // we should limit to results 300 for performance
+        // we should limit the results to 75 for performance
         var pagesize = (scopeAllProjects && typePath === topLevelTypePath) ? 75 : 1200;
 
         var config = {
@@ -1860,7 +1860,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
         }
 
-        if (!scopeAllProjects && typePath === topLevelTypePath) {
+        if (!scopeAllProjects && (typePath === topLevelTypePath || gApp._isAncestorSelected())) {
             // Keep project scoping
         }
         else {
@@ -2554,40 +2554,45 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return defaultMessage;
     },
 
-    // getCurrentView: function () {
-
-    //     var model = this.getModel();
-    //         return _.map(this.columnConfig.fields, function(field) {
-    //             var modelField = model.getField(field);
-    //             return modelField && modelField.getUUID() || field
-    //         }, this)
+    getCurrentView: function () {
+        return {
+            piTypeCombobox: '',
+            scopeCombobox: '',
 
 
-    //         var view = _.pick(this.getState(), ["columns", "sorters"]);
-    //         return view.columns = _.map(_.filter(view.columns, {
-    //             xtype: "rallyfieldcolumn"
-    //         }), function(c) {
-    //             return _.pick(c, ["dataIndex", "flex"])
-    //         }),
-    //         view
-
-    //         var view = this.getState()
-    //           , gridOrBoard = this.getGridOrBoard();
-    //         return _.isFunction(gridOrBoard.getCurrentView) && Ext.apply(view, gridOrBoard.getCurrentView()),
-    //         _.each(this._getSharedViewProperties(this.plugins.concat(this.sharedViewAdditionalCmps)), function(v) {
-    //             Ext.apply(view, v)
-    //         }),
-    //         view
+        };
+        // var model = this.getModel();
+        //     return _.map(this.columnConfig.fields, function(field) {
+        //         var modelField = model.getField(field);
+        //         return modelField && modelField.getUUID() || field
+        //     }, this)
 
 
-    //         return _.pick(this.getControlCmp().getComponent("inlineFilterButton").getState(), this.sharedViewState)
+        //     var view = _.pick(this.getState(), ["columns", "sorters"]);
+        //     return view.columns = _.map(_.filter(view.columns, {
+        //         xtype: "rallyfieldcolumn"
+        //     }), function(c) {
+        //         return _.pick(c, ["dataIndex", "flex"])
+        //     }),
+        //     view
+
+        //     var view = this.getState()
+        //       , gridOrBoard = this.getGridOrBoard();
+        //     return _.isFunction(gridOrBoard.getCurrentView) && Ext.apply(view, gridOrBoard.getCurrentView()),
+        //     _.each(this._getSharedViewProperties(this.plugins.concat(this.sharedViewAdditionalCmps)), function(v) {
+        //         Ext.apply(view, v)
+        //     }),
+        //     view
+
+
+        //     return _.pick(this.getControlCmp().getComponent("inlineFilterButton").getState(), this.sharedViewState)
 
 
 
-    //     return {
-    //         piTypePicker: this.getRecord().get("_refObjectUUID")
-    //     };
-    // },
+        // return {
+        //     piTypePicker: this.getRecord().get("_refObjectUUID")
+        // };
+    },
 
     _addAncestorPlugin: function () {
         gApp.ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
