@@ -9,11 +9,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             hideArchived: true,
             lineSize: 40,
             cardHover: true,
-            calendarOverlay: false,
+            calendarOverlay: true,
             iterationOverlay: false,
             releaseOverlay: true,
-            milestoneOverlay: false,
-            dependencyOverlay: false,
+            calendarGridlines: false,
+            iterationGridlines: false,
+            releaseGridlines: true,
+            milestoneGridlines: false,
+            dependencyStrings: false,
+            todayGridline: true
         }
     },
 
@@ -21,14 +25,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     getSettingsFields: function () {
         var returned = [
-            // {
-            //     xtype: 'panel',
-            //     title: 'Default Overlays & Gridlines',
-            //     width: 240,
-            //     items: [
-
-            //   ]
-            //},
             {
                 name: 'hideArchived',
                 xtype: 'rallycheckboxfield',
@@ -65,7 +61,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             {
                 name: 'calendarOverlay',
                 xtype: 'rallycheckboxfield',
-                fieldLabel: 'Calendar Lines',
+                fieldLabel: 'Axis Dates',
                 labelAlign: 'left',
                 width: 225,
                 labelWidth: 200
@@ -73,7 +69,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             {
                 name: 'iterationOverlay',
                 xtype: 'rallycheckboxfield',
-                fieldLabel: 'Iterations',
+                fieldLabel: 'Iteration Overlay',
                 labelAlign: 'left',
                 width: 225,
                 labelWidth: 200
@@ -81,28 +77,59 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             {
                 name: 'releaseOverlay',
                 xtype: 'rallycheckboxfield',
-                fieldLabel: 'Releases',
+                fieldLabel: 'Release Overlay',
                 labelAlign: 'left',
                 width: 225,
                 labelWidth: 200
             },
             {
-                name: 'milestoneOverlay',
+                name: 'calendarGridlines',
                 xtype: 'rallycheckboxfield',
-                fieldLabel: 'Milestones',
+                fieldLabel: 'Date Gridlines',
                 labelAlign: 'left',
                 width: 225,
                 labelWidth: 200
             },
             {
-                name: 'dependencyOverlay',
+                name: 'iterationGridlines',
                 xtype: 'rallycheckboxfield',
-                fieldLabel: 'Dependencies',
+                fieldLabel: 'Iteration Gridlines',
                 labelAlign: 'left',
                 width: 225,
                 labelWidth: 200
             },
-
+            {
+                name: 'releaseGridlines',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Release Gridlines',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'milestoneGridlines',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Milestone Gridlines',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'dependencyStrings',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Dependency strings',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
+            {
+                name: 'todayGridline',
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Today Gridline',
+                labelAlign: 'left',
+                width: 225,
+                labelWidth: 200
+            },
         ];
         return returned;
     },
@@ -110,8 +137,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     itemId: 'rallyApp',
     MIN_COLUMN_WIDTH: 200,        //Looks silly on less than this
-    LOAD_STORE_MAX_RECORDS: 100, //Can blow up the Rally.data.wsapi.filter.Or
-    WARN_STORE_MAX_RECORDS: 300, //Can be slow if you fetch too many
     _rowHeight: 40,               //Leave space for "World view" text
     STORE_FETCH_FIELD_LIST:
         [
@@ -141,13 +166,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             'Release',
             'Iteration',
             'Milestones'
-            //Customer specific after here. Delete as appropriate
-            // 'c_ProjectIDOBN',
-            // 'c_QRWP',
-            // 'c_ProgressUpdate',
-            // 'c_RAIDSeverityCriticality',
-            // 'c_RISKProbabilityLevel',
-            // 'c_RAIDRequestStatus'   
         ],
     CARD_DISPLAY_FIELD_LIST:
         [
@@ -163,10 +181,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             'ActualStartDate',
             'ActualEndDate',
             'State'
-            //Customer specific after here. Delete as appropriate
-            // 'c_ProjectIDOBN',
-            // 'c_QRWP'
-
         ],
 
     items: [
@@ -326,11 +340,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _setAxis: function () {
         if (gApp.gX) { gApp.gX.remove(); }
-        var showCalendarTicks = gApp.down('#calendarDatesCheckbox').getValue();
+        var showCalendarTicks = gApp.down('#dateGridlineCheckbox').getValue();
         var topPadding = 35;
         topPadding += gApp.down('#releasesCheckbox').getValue() ? 25 : 0;
         topPadding += gApp.down('#iterationsCheckbox').getValue() ? 26 : 0;
-        //topPadding += (gApp.down('#releasesCheckbox').getValue() && gApp.down('#iterationsCheckbox').getValue()) ? 6 : 0;
         var svg = d3.select('#rootSurface');
         var width = +svg.attr('width');
         var height = +svg.attr('height');
@@ -350,7 +363,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             d3.selectAll('.tick line').attr('y1', topPadding);
         }
 
-        if (gApp.iterations && gApp.iterations.length && gApp.down('#iterationsCheckbox').getValue()) {
+        if (!gApp.down('#dateAxisCheckbox').getValue()) {
+            d3.selectAll('.tick text').attr('y', -50);
+        }
+
+        if (gApp.iterations && gApp.iterations.length && gApp.down('#iterationGridlineCheckbox').getValue()) {
             gApp.gX.selectAll('iterationticks')
                 .data(gApp.iterations)
                 .enter().append('line')
@@ -375,7 +392,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 });
         }
 
-        if (gApp.down('#releasesCheckbox').getValue()) {
+        if (gApp.down('#releaseGridlineCheckbox').getValue()) {
             gApp.gX.selectAll('releaseticks')
                 .data(gApp.releases)
                 .enter().append('line')
@@ -400,7 +417,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 });
         }
 
-        if (gApp.milestones && gApp.milestones.length && gApp.down('#milestonesCheckbox').getValue()) {
+        if (gApp.milestones && gApp.milestones.length && gApp.down('#milestoneGridlineCheckbox').getValue()) {
             gApp.gX.selectAll('milestoneticks')
                 .data(gApp.milestones)
                 .enter().append('line')
@@ -424,20 +441,21 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 });
         }
 
-        gApp.gX.append('line')
-            .attr('x1', function () { return gApp.dateScaler(new Date()); })
-            .attr('y1', topPadding)
-            .attr('x2', function () { return gApp.dateScaler(new Date()); })
-            .attr('y2', function () { return height; })
-            .attr('class', 'today-line')
-            .on('mouseover', function () {
-                gApp._addHoverTooltip(this, 'today-line-hover', 'todayLineTooltip', ['Today'], 48, 25);
-            })
-            .on('mouseout', function () {
-                d3.select(this).attr('class', 'today-line');
-                d3.select('#todayLineTooltip').remove();
-            });
-
+        if (gApp.down('#todayGridlineCheckbox').getValue()) {
+            gApp.gX.append('line')
+                .attr('x1', function () { return gApp.dateScaler(new Date()); })
+                .attr('y1', topPadding)
+                .attr('x2', function () { return gApp.dateScaler(new Date()); })
+                .attr('y2', function () { return height; })
+                .attr('class', 'today-line')
+                .on('mouseover', function () {
+                    gApp._addHoverTooltip(this, 'today-line-hover', 'todayLineTooltip', ['Today'], 48, 25);
+                })
+                .on('mouseout', function () {
+                    d3.select(this).attr('class', 'today-line');
+                    d3.select('#todayLineTooltip').remove();
+                });
+        }
     },
 
     _addHoverTooltip: function (hoverEl, hoverElClass, tipId, tipText, width, height) {
@@ -781,7 +799,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .on('click', function (d, idx, arr) {
                 //Browsers get confused over the shift key (think it's 'selectAll')
                 if (d3.event.altKey) {
-                    gApp._dataPanel(d, idx, arr);
+                    // gApp._dataPanel(d, idx, arr);
                 } else if (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
                     gApp._setTimeline(d);
                 }
@@ -821,7 +839,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 .on('click', function (d, idx, arr) {
                     //Browsers get confused over the shift key (think it's 'selectAll')
                     if (d3.event.altKey) {
-                        gApp._dataPanel(d, idx, arr);
+                        // gApp._dataPanel(d, idx, arr);
                     } else if (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
                         gApp._setTimeline(d);
                     }
@@ -1031,308 +1049,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (event.altKey) {
             gApp._nodePopup(node, index, array);
         } else {
-            gApp._dataPanel(node, index, array);
+            // gApp._dataPanel(node, index, array);
         }
-    },
-
-    _dataPanel: function (node, index, array) {
-        var childField = node.data.record.hasField('Children') ? 'Children' : 'UserStories';
-        var model = node.data.record.hasField('Children') ? node.data.record.data.Children._type : 'UserStory';
-
-        Ext.create('Rally.ui.dialog.Dialog', {
-            autoShow: true,
-            draggable: true,
-            closable: true,
-            width: 1200,
-            height: 800,
-            style: {
-                border: "thick solid #000000"
-            },
-            overflowY: 'scroll',
-            overflowX: 'none',
-            record: node.data.record,
-            disableScroll: false,
-            model: model,
-            childField: childField,
-            title: 'Information for ' + node.data.record.get('FormattedID') + ': ' + node.data.record.get('Name'),
-            layout: 'hbox',
-            items: [
-                {
-                    xtype: 'container',
-                    itemId: 'leftCol',
-                    width: 500,
-                },
-                {
-                    xtype: 'container',
-                    itemId: 'rightCol',
-                    width: 700  //Leave 20 for scroll bar
-                }
-            ],
-            listeners: {
-                afterrender: function () {
-                    this.down('#leftCol').add(
-                        {
-                            xtype: 'rallycard',
-                            record: this.record,
-                            fields: gApp.CARD_DISPLAY_FIELD_LIST,
-                            showAge: true,
-                            resizable: true
-                        }
-                    );
-
-                    if (this.record.get('c_ProgressUpdate')) {
-                        this.down('#leftCol').insert(1,
-                            {
-                                xtype: 'component',
-                                width: '100%',
-                                autoScroll: true,
-                                html: this.record.get('c_ProgressUpdate')
-                            }
-                        );
-                        this.down('#leftCol').insert(1,
-                            {
-                                xtype: 'text',
-                                text: 'Progress Update: ',
-                                style: {
-                                    fontSize: '13px',
-                                    textTransform: 'uppercase',
-                                    fontFamily: 'ProximaNova,Helvetica,Arial',
-                                    fontWeight: 'bold'
-                                },
-                                margin: '0 0 10 0'
-                            }
-                        );
-                    }
-                    //This is specific to customer. Features are used as RAIDs as well.
-                    if ((this.record.self.ordinal === 1) && this.record.hasField('c_RAIDType')) {
-                        var me = this;
-                        var rai = this.down('#leftCol').add(
-                            {
-                                xtype: 'rallypopoverchilditemslistview',
-                                target: array[index],
-                                record: this.record,
-                                childField: this.childField,
-                                addNewConfig: null,
-                                gridConfig: {
-                                    title: '<b>Risks and Issues:</b>',
-                                    enableEditing: false,
-                                    enableRanking: false,
-                                    enableBulkEdit: false,
-                                    showRowActionsColumn: false,
-                                    storeConfig: this.RAIDStoreConfig(),
-                                    columnCfgs: [
-                                        'FormattedID',
-                                        'Name',
-                                        {
-                                            text: 'RAID Type',
-                                            dataIndex: 'c_RAIDType',
-                                            minWidth: 80
-                                        },
-                                        {
-                                            text: 'RAG Status',
-                                            dataIndex: 'Release',  //Just so that a sorter gets called on column ordering
-                                            width: 60,
-                                            renderer: function (value, metaData, record, rowIdx, colIdx, store) {
-                                                var setColour = (record.get('c_RAIDType') === 'Risk') ?
-                                                    me.RISKColour : me.AIDColour;
-
-                                                return '<div ' +
-                                                    'class="' + setColour(
-                                                        record.get('c_RAIDSeverityCriticality'),
-                                                        record.get('c_RISKProbabilityLevel'),
-                                                        record.get('c_RAIDRequestStatus')
-                                                    ) +
-                                                    '"' +
-                                                    '>&nbsp</div>';
-                                            },
-                                            listeners: {
-                                                mouseover: function (gridView, cell, rowIdx, cellIdx, event, record) {
-                                                    Ext.create('Rally.ui.tooltip.ToolTip', {
-                                                        target: cell,
-                                                        html:
-                                                            '<p>' + '   Severity: ' + record.get('c_RAIDSeverityCriticality') + '</p>' +
-                                                            '<p>' + 'Probability: ' + record.get('c_RISKProbabilityLevel') + '</p>' +
-                                                            '<p>' + '     Status: ' + record.get('c_RAIDRequestStatus') + '</p>'
-                                                    });
-
-                                                    return true;    //Continue processing for popover
-                                                }
-                                            }
-                                        },
-                                        'ScheduleState'
-                                    ]
-                                },
-                                model: this.model
-                            }
-                        );
-                        rai.down('#header').destroy();
-                    }
-                    var children = this.down('#rightCol').add(
-                        {
-                            xtype: 'rallypopoverchilditemslistview',
-                            target: array[index],
-                            record: this.record,
-                            width: '95%',
-                            childField: this.childField,
-                            addNewConfig: null,
-                            gridConfig: {
-                                title: '<b>Children:</b>',
-                                enableEditing: false,
-                                enableRanking: false,
-                                enableBulkEdit: false,
-                                showRowActionsColumn: false,
-                                storeConfig: this.nonRAIDStoreConfig(),
-                                columnCfgs: [
-                                    'FormattedID',
-                                    'Name',
-                                    {
-                                        text: '% By Count',
-                                        dataIndex: 'PercentDoneByStoryCount'
-                                    },
-                                    {
-                                        text: '% By Est',
-                                        dataIndex: 'PercentDoneByStoryPlanEstimate'
-                                    },
-                                    {
-                                        text: 'Timebox',
-                                        dataIndex: 'Project',  //Just so that the renderer gets called
-                                        minWidth: 80,
-                                        renderer: function (value, metaData, record, rowIdx, colIdx, store) {
-                                            var retval = '';
-                                            if (record.hasField('Iteration')) {
-                                                retval = record.get('Iteration') ? record.get('Iteration').Name : 'NOT PLANNED';
-                                            } else if (record.hasField('Release')) {
-                                                retval = record.get('Release') ? record.get('Release').Name : 'NOT PLANNED';
-                                            } else if (record.hasField('PlannedStartDate')) {
-                                                retval = Ext.Date.format(record.get('PlannedStartDate'), 'd/M/Y') + ' - ' + Ext.Date.format(record.get('PlannedEndDate'), 'd/M/Y');
-                                            }
-                                            return (retval);
-                                        }
-                                    },
-                                    'State',
-                                    'PredecessorsAndSuccessors',
-                                    'ScheduleState'
-                                ]
-                            },
-                            model: this.model
-                        }
-                    );
-                    children.down('#header').destroy();
-
-                    var cfd = Ext.create('Rally.apps.CFDChart', {
-                        record: this.record,
-                        width: '95%',
-                        container: this.down('#rightCol')
-                    });
-                    cfd.generateChart();
-
-                }
-            },
-
-            //This is specific to customer. Features are used as RAIDs as well.
-            nonRAIDStoreConfig: function () {
-                if (this.record.hasField('c_RAIDType')) {
-                    switch (this.record.self.ordinal) {
-                        case 1:
-                            return {
-                                filters: {
-                                    property: 'c_RAIDType',
-                                    operator: '=',
-                                    value: ''
-                                },
-                                fetch: gApp.STORE_FETCH_FIELD_LIST,
-                                pageSize: 50
-                            };
-                        default:
-                            return {
-                                fetch: gApp.STORE_FETCH_FIELD_LIST,
-                                pageSize: 50
-                            };
-                    }
-                }
-                else {
-                    return {
-                        fetch: gApp.STORE_FETCH_FIELD_LIST,
-                        pageSize: 50
-                    };
-                }
-            },
-
-            //This is specific to customer. Features are used as RAIDs as well.
-            RAIDStoreConfig: function () {
-                if (this.record.hasField('c_RAIDType')) {
-                    return {
-                        filters: [{
-                            property: 'c_RAIDType',
-                            operator: '!=',
-                            value: ''
-                        }],
-                        fetch: gApp.STORE_FETCH_FIELD_LIST,
-                        pageSize: 50
-                    };
-                }
-                else {
-                    return {
-                        fetch: gApp.STORE_FETCH_FIELD_LIST,
-                        pageSize: 50
-                    };
-                }
-            },
-
-            RISKColour: function (severity, probability, state) {
-                if (state === 'Closed' || state === 'Cancelled') {
-                    return 'RAID-blue';
-                }
-
-                if (severity === 'Exceptional') {
-                    return 'RAID-red textBlink';
-                }
-
-                if (severity === 'High' && (probability === 'Likely' || probability === 'Certain')) {
-                    return 'RAID-red';
-                }
-
-                if (
-                    (severity === 'High' && (probability === 'Unlikely' || probability === 'Possible')) ||
-                    (severity === 'Moderate' && (probability === 'Likely' || probability === 'Certain'))
-                ) {
-                    return 'RAID-amber';
-                }
-                if (
-                    (severity === 'Moderate' && (probability === 'Unlikely' || probability === 'Possible')) ||
-                    (severity === 'Low')
-                ) {
-                    return 'RAID-green';
-                }
-
-                var lClass = 'RAID-missing';
-                if (!severity) { lClass += '-severity'; }
-                if (!probability) { lClass += '-probability'; }
-
-                return lClass;
-            },
-
-            AIDColour: function (severity, probability, state) {
-                if (state === 'Closed' || state === 'Cancelled') {
-                    return 'RAID-blue';
-                }
-
-                if (severity === 'Exceptional') {
-                    return 'RAID-red';
-                }
-
-                if (severity === 'High') {
-                    return 'RAID-amber';
-                }
-
-                if ((severity === 'Moderate') ||
-                    (severity === 'Low')
-                ) {
-                    return 'RAID-green';
-                }
-                return 'RAID-missing-severity-probability'; //Mark as unknown
-            }
-        });
     },
 
     _nodes: [],
@@ -1532,7 +1250,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     type: 'hbox',
                     align: 'middle',
                     padding: 10,
-                    defaultMargins: '0 30 15 0'
+                    defaultMargins: '0 25 15 0'
                 },
                 items: [
                     {
@@ -1613,20 +1331,19 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         xtype: 'rallybutton',
                         text: 'RESET AXIS',
                         style: fontStyle,
-                        //width: 50,
                         margin: 0,
                         itemId: 'resetViewBtn',
                         handler: gApp._startTreeAgain
                     },
                     {
                         xtype: 'panel',
-                        title: 'GRIDLINES & OVERLAYS',
+                        title: 'AXIS LABELS',
                         titleAlign: 'center',
                         titleCollapse: true,
                         collapsible: true,
                         collapsed: true,
                         border: false,
-                        width: 220,
+                        width: 115,
                         layout: {
                             type: 'hbox'
                         },
@@ -1645,12 +1362,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                 border: 0,
                                 items: [
                                     {
-                                        boxLabel: 'Calendar dates',
-                                        itemId: 'calendarDatesCheckbox',
+                                        boxLabel: 'Dates',
+                                        itemId: 'dateAxisCheckbox',
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
                                         checked: gApp.getSetting('calendarOverlay'),
-                                        id: 'calendarDatesCheckbox',
                                         handler: gApp._setAxis
                                     },
                                     {
@@ -1659,7 +1375,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
                                         checked: gApp.getSetting('iterationOverlay'),
-                                        id: 'iterationsCheckbox',
                                         handler: gApp._rescaledStart
                                     },
                                     {
@@ -1668,8 +1383,61 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                         name: 'overlayCheckboxes',
                                         inputValue: true,
                                         checked: gApp.getSetting('releaseOverlay'),
-                                        id: 'releasesCheckbox',
                                         handler: gApp._rescaledStart
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        xtype: 'panel',
+                        title: 'GRIDLINES',
+                        titleAlign: 'center',
+                        titleCollapse: true,
+                        collapsible: true,
+                        collapsed: true,
+                        border: false,
+                        width: 200,
+                        layout: {
+                            type: 'hbox'
+                        },
+                        items: [
+                            {
+                                xtype: 'fieldcontainer',
+                                layout: {
+                                    type: 'vbox'
+                                },
+                                labelStyle: fontStyle,
+                                labelSeparator: '',
+                                labelWidth: 0,
+                                width: 95,
+                                margin: 5,
+                                defaultType: 'checkboxfield',
+                                border: 0,
+                                items: [
+                                    {
+                                        boxLabel: 'Dates',
+                                        itemId: 'dateGridlineCheckbox',
+                                        name: 'gridlineCheckboxes',
+                                        inputValue: true,
+                                        checked: gApp.getSetting('calendarGridlines'),
+                                        handler: gApp._setAxis
+                                    },
+                                    {
+                                        boxLabel: 'Iterations',
+                                        itemId: 'iterationGridlineCheckbox',
+                                        name: 'gridlineCheckboxes',
+                                        inputValue: true,
+                                        checked: gApp.getSetting('iterationGridlines'),
+                                        handler: gApp._setAxis
+                                    },
+                                    {
+                                        boxLabel: 'Releases',
+                                        itemId: 'releaseGridlineCheckbox',
+                                        name: 'gridlineCheckboxes',
+                                        inputValue: true,
+                                        checked: gApp.getSetting('releaseGridlines'),
+                                        handler: gApp._setAxis
                                     }
                                 ]
                             },
@@ -1689,20 +1457,26 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                 items: [
                                     {
                                         boxLabel: 'Milestones',
-                                        itemId: 'milestonesCheckbox',
-                                        name: 'overlayCheckboxes',
+                                        itemId: 'milestoneGridlineCheckbox',
+                                        name: 'gridlineCheckboxes',
                                         inputValue: true,
-                                        checked: gApp.getSetting('milestoneOverlay'),
-                                        id: 'milestonesCheckbox',
+                                        checked: gApp.getSetting('milestoneGridlines'),
                                         handler: gApp._setAxis
                                     },
                                     {
                                         boxLabel: 'Dependencies',
                                         itemId: 'showDependenciesCheckbox',
-                                        name: 'overlayCheckboxes',
+                                        name: 'gridlineCheckboxes',
                                         inputValue: true,
-                                        checked: gApp.getSetting('dependencyOverlay'),
-                                        id: 'showDependenciesCheckbox',
+                                        checked: gApp.getSetting('dependencyStrings'),
+                                        handler: gApp._setAxis
+                                    },
+                                    {
+                                        boxLabel: 'Today',
+                                        itemId: 'todayGridlineCheckbox',
+                                        name: 'gridlineCheckboxes',
+                                        inputValue: true,
+                                        checked: gApp.getSetting('todayGridline'),
                                         handler: gApp._setAxis
                                     }
                                 ]
