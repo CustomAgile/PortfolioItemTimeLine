@@ -4,8 +4,8 @@
     "server": "https://rally1.rallydev.com",
     "sdk": "2.1",
     "javascript": [
-        "node_modules/@agile-central-technical-services/utils-ancestor-pi-app-filter/index.js",
-        "multi-level-pi-filter.js",
+        "node_modules/@agile-central-technical-services/utils-shared-views/index.js",
+        "./node_modules/@customagile/ancestor-pi-multi-level-pi-app-filter/index.js",
         "App.js",
         "DateMixin.js",
         "CFDChart.js",

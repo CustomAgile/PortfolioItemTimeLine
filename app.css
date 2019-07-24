@@ -3,6 +3,10 @@
   box-shadow: none;
 }
 
+.btn-default-small-noicon .x-btn-inner {
+  line-height: 14px;
+}
+
 .tree-arrow {
   fill: grey;
 }
@@ -352,19 +356,20 @@ text.collapse-arrow {
 }
 
 .x-tab-bar .x-tab-default {
-  background-color: #00a9e0;
+  background-color: white;
+  border-radius: 4px 4px 0 0;
 }
 
 .x-tab-bar .x-tab-default .x-tab-inner {
-  color: white;
+  color: #00a9e0;
 }
 
 .x-tab-bar .x-tab-active {
-  background-color: white;
+  background-color: #00a9e0;
 }
 
 .x-tab-bar .x-tab-active .x-tab-inner {
-  color: #00a9e0;
+  color: white;
 }
 
 .timeline-tooltip rect {
