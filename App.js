@@ -1119,7 +1119,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _nodes: [],
 
     onSettingsUpdate: function () {
-        gApp._refreshTimeline();
+        setTimeout(gApp._refreshTimeline, 500);
     },
 
     _onAncestorFilterChange: async function () {
@@ -1780,8 +1780,22 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var topLevelTypePath = gApp.down('#piTypeCombobox').getValue();
 
         // If scoping is set to all projects and we're retrieving the top level PIs
-        // we should limit the results to 75 for performance
-        var pagesize = (scopeAllProjects && typePath === topLevelTypePath) ? 75 : 1000;
+        // we  limit the results for performance reasons
+        var pagesize = 800;
+        if (scopeAllProjects && typePath === topLevelTypePath) {
+            let ord = gApp._getOrdFromTypePath(typePath);
+            if (ord) {
+                if (ord === 1) {
+                    pagesize = 200;
+                }
+                else if (ord === 2) {
+                    pagesize = 100;
+                }
+                else {
+                    pagesize = 30;
+                }
+            }
+        }
 
         var config = {
             model: typePath,
@@ -2243,7 +2257,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _getAncestorTypeOrdinal() {
-        return gApp._getOrdFromModel(gApp.ancestorFilterPlugin._getValue().piTypePath);
+        return gApp._getOrdFromTypePath(gApp.ancestorFilterPlugin._getValue().piTypePath);
     },
 
     _getTypeList: function (highestOrdinal) {
@@ -2266,7 +2280,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (gApp.advFilters) {
             _.each(gApp.advFilters, function (filter, key) {
                 if (filter.length) {
-                    let ord = gApp._getOrdFromModel(key);
+                    let ord = gApp._getOrdFromTypePath(key);
                     if (ord !== null && ord < lowestOrd) {
                         lowestOrd = ord;
                     }
@@ -2283,14 +2297,14 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return model && model.get('TypePath');
     },
 
-    _getOrdFromModel: function (modelName) {
-        var model = null;
+    _getOrdFromTypePath: function (typePath) {
+        var ord = null;
         _.each(gApp._typeStore, function (type) {
-            if (modelName.toLowerCase() === type.get('TypePath').toLowerCase()) {
-                model = type.get('Ordinal');
+            if (typePath.toLowerCase() === type.get('TypePath').toLowerCase()) {
+                ord = type.get('Ordinal');
             }
         });
-        return model;
+        return ord;
     },
 
     _shouldShowRoot() {
@@ -2825,7 +2839,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     afterrender: function (tooltip) {
                         Ext.create('Rally.ui.tooltip.ToolTip', {
                             target: (tooltip.labelEl && tooltip.labelEl.dom.children.length && tooltip.labelEl.dom.children[0]) || tooltip.labelEl,
-                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results limited to 75 rows</p></div>',
+                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results will be limited</p></div>',
                             itemId: 'scopeTip',
                             id: 'scopeTip',
                             showDelay: 200

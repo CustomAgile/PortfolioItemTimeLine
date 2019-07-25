@@ -3,8 +3,8 @@
 <head>
     <title>Enhanced Portfolio Item Timeline</title>
     <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
-    <!--  Build Date: Wed Jul 24 2019 16:32:35 GMT-0400 (Eastern Daylight Time) -->
-    <!--  Version: "0.2.0"-->
+    <!--  Build Date: Thu Jul 25 2019 10:31:38 GMT-0400 (Eastern Daylight Time) -->
+    <!--  Version: "0.2.1"-->
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
     <script type="text/javascript">
@@ -263,6 +263,9 @@
         }, this);
     },
 
+    // Returns a filter that will ensure results are children of the
+    // selected ancestor portfolio item. type is the TypeDefinition 
+    // for the Portfolio Item level you wish to fetch.
     getAncestorFilterForType: function (type) {
         var filter;
         var modelName = type.toLowerCase();
@@ -295,6 +298,10 @@
         return filter;
     },
 
+    // Returns an array containing all of the filters applied in the
+    // multi-level filter as well as the selected ancestor PI if one
+    // is selected. type is the TypeDefinition for the Portfolio Item
+    // level you wish to fetch.
     getAllFiltersForType: function (type) {
         let ancestorFilter = this.getAncestorFilterForType(type);
         let filters = ancestorFilter ? [ancestorFilter] : [];
@@ -303,6 +310,9 @@
         return filters;
     },
 
+    // Returns an array containing all of the filters applied in the
+    // multi-level filter. type is the TypeDefinition for the Portfolio 
+    // Item level you wish to fetch.
     getMultiLevelFiltersForType: function (type) {
         let filters = [];
         let modelName = type.toLowerCase();
@@ -333,6 +343,9 @@
         return filters;
     },
 
+    // Returns an object containing all of the filters applied in the multi-level
+    // filter. Keys are the type definition field and the resulting values are arrays
+    // of filters
     getMultiLevelFilters: function () {
         var filters = {};
 
@@ -352,6 +365,8 @@
         return this._getValue().ignoreProjectScope;
     },
 
+    // Returns an object of states for all of the inline filters
+    // Used for getting and setting shared views
     getMultiLevelFilterStates: function () {
         var states = {};
         _.each(this.filterControls, function (filterControl) {
@@ -362,6 +377,8 @@
         return states;
     },
 
+    // Sets the states of the inline filters
+    // Used when applying a shared view to the filters
     setMultiLevelFilterStates: function (states) {
         this.tabPanel.removeAll();
         for (let key in states) {
@@ -786,8 +803,8 @@
                         project: null
                     }
                 },
-                queryDelay: 1250,
-                autoSelect: false,
+                queryDelay: 7000,
+                // autoSelect: false,
                 autoSelectCurrentItem: false,
                 stateful: true,
                 stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piSelector'),
@@ -797,7 +814,7 @@
                 clearValue: null,
                 allowNoEntry: this.allowNoEntry,
                 noEntryValue: '',
-                value: initialValue,
+                value: initialValue || '',
                 // forceSelection: false,
                 defaultSelectionPosition: null,
                 listeners: {
@@ -1097,6 +1114,7 @@
     },
 
     _onFilterReady: function (panel) {
+        panel.expand();
         let filterCount = panel.quickFilterPanel.getFilters().length + panel.advancedFilterPanel.getFilters().length;
         let modelName = (panel.model && panel.model.elementName) || 'unknown';
 
@@ -1106,13 +1124,12 @@
             itemId: `${modelName}-tab`,
 
         });
+
         tab.add({
             xtype: 'container',
             layout: 'hbox',
             items: [panel]
         });
-
-        panel.expand();
     },
 
     _applyFilters: function () {
@@ -2288,7 +2305,7 @@
     _nodes: [],
 
     onSettingsUpdate: function () {
-        gApp._refreshTimeline();
+        setTimeout(gApp._refreshTimeline, 500);
     },
 
     _onAncestorFilterChange: async function () {
@@ -2949,8 +2966,22 @@
         var topLevelTypePath = gApp.down('#piTypeCombobox').getValue();
 
         // If scoping is set to all projects and we're retrieving the top level PIs
-        // we should limit the results to 75 for performance
-        var pagesize = (scopeAllProjects && typePath === topLevelTypePath) ? 75 : 1000;
+        // we  limit the results for performance reasons
+        var pagesize = 800;
+        if (scopeAllProjects && typePath === topLevelTypePath) {
+            let ord = gApp._getOrdFromTypePath(typePath);
+            if (ord) {
+                if (ord === 1) {
+                    pagesize = 200;
+                }
+                else if (ord === 2) {
+                    pagesize = 100;
+                }
+                else {
+                    pagesize = 30;
+                }
+            }
+        }
 
         var config = {
             model: typePath,
@@ -3412,7 +3443,7 @@
     },
 
     _getAncestorTypeOrdinal() {
-        return gApp._getOrdFromModel(gApp.ancestorFilterPlugin._getValue().piTypePath);
+        return gApp._getOrdFromTypePath(gApp.ancestorFilterPlugin._getValue().piTypePath);
     },
 
     _getTypeList: function (highestOrdinal) {
@@ -3435,7 +3466,7 @@
         if (gApp.advFilters) {
             _.each(gApp.advFilters, function (filter, key) {
                 if (filter.length) {
-                    let ord = gApp._getOrdFromModel(key);
+                    let ord = gApp._getOrdFromTypePath(key);
                     if (ord !== null && ord < lowestOrd) {
                         lowestOrd = ord;
                     }
@@ -3452,14 +3483,14 @@
         return model && model.get('TypePath');
     },
 
-    _getOrdFromModel: function (modelName) {
-        var model = null;
+    _getOrdFromTypePath: function (typePath) {
+        var ord = null;
         _.each(gApp._typeStore, function (type) {
-            if (modelName.toLowerCase() === type.get('TypePath').toLowerCase()) {
-                model = type.get('Ordinal');
+            if (typePath.toLowerCase() === type.get('TypePath').toLowerCase()) {
+                ord = type.get('Ordinal');
             }
         });
-        return model;
+        return ord;
     },
 
     _shouldShowRoot() {
@@ -3994,7 +4025,7 @@
                     afterrender: function (tooltip) {
                         Ext.create('Rally.ui.tooltip.ToolTip', {
                             target: (tooltip.labelEl && tooltip.labelEl.dom.children.length && tooltip.labelEl.dom.children[0]) || tooltip.labelEl,
-                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results limited to 75 rows</p></div>',
+                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results will be limited</p></div>',
                             itemId: 'scopeTip',
                             id: 'scopeTip',
                             showDelay: 200
@@ -21007,7 +21038,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             Rally.launchApp('CustomAgile.apps.PortfolioItemTimeline.app', {
                 name:"Enhanced Portfolio Item Timeline",
                 parentRepos:"",
-                version:"0.2.0"
+                version:"0.2.1"
             });
 
         });
