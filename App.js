@@ -2877,7 +2877,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         html: '',
                         itemId: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
                         padding: 10,
-                        minHeight: 50
+                        height: 65
                     }
                 ]
             });
