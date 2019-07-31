@@ -382,7 +382,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
                     gApp._addHoverTooltip(this, 'iteration-line-hover', tipId, tipText, 160, 60);
                 })
-                .on('mouseout', function (d) {
+                .on('mouseout', function () {
                     d3.select(this).attr('class', 'iteration-line');
                     d3.select('#tooltip-iteration-line').remove();
                 });
@@ -407,7 +407,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
                     gApp._addHoverTooltip(this, 'release-line-hover', tipId, tipText, 160, 60);
                 })
-                .on('mouseout', function (d) {
+                .on('mouseout', function () {
                     d3.select(this).attr('class', 'release-line');
                     d3.select('#tooltip-release-line').remove();
                 });
@@ -861,11 +861,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('class', 'clickable')
             .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
             .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
-            .on('click', function (d, idx, arr) {
+            .on('click', function (d) {
                 //Browsers get confused over the shift key (think it's 'selectAll')
-                if (d3.event.altKey) {
-                    // gApp._dataPanel(d, idx, arr);
-                } else if (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
+                // if (d3.event.altKey) {
+                // gApp._dataPanel(d, idx, arr);
+                // } else 
+                if (!d3.event.altKey && d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
                     gApp._setTimeline(d);
                 }
             });
@@ -876,7 +877,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('x', function (d) { return 5 - d.plannedDrawnX + (d.depth * 10); })
             .attr('alignment-baseline', 'central')
             .text('V')
-            .attr('class', function (d) {
+            .attr('class', function () {
                 var lClass = 'icon-gear app-menu';
                 // if (!d.data.record.get('PlannedStartDate') || !d.data.record.get('PlannedEndDate')) {
                 //     lClass += ' error';
@@ -900,11 +901,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('style', 'font-size:12')
             .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
             .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
-            .on('click', function (d, idx, arr) {
+            .on('click', function (d) {
                 //Browsers get confused over the shift key (think it's 'selectAll')
-                if (d3.event.altKey) {
-                    // gApp._dataPanel(d, idx, arr);
-                } else if (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
+                // if (d3.event.altKey) {
+                // gApp._dataPanel(d, idx, arr);
+                // } else 
+                if (!d3.event.altKey && d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
                     gApp._setTimeline(d);
                 }
             })
@@ -1111,9 +1113,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         //Get ordinal (or something ) to indicate we are the lowest level, then use "UserStories" instead of "Children"
         if (event.altKey) {
             gApp._nodePopup(node, index, array);
-        } else {
-            // gApp._dataPanel(node, index, array);
         }
+        // else {
+        // gApp._dataPanel(node, index, array);
+        // }
     },
 
     _nodes: [],
@@ -1820,7 +1823,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             config.filters = config.filters.concat(filters);
         }
 
-        if (!scopeAllProjects && typePath === topLevelTypePath) { //  || gApp._isAncestorSelected()
+        if (!scopeAllProjects && typePath === topLevelTypePath) {
             // Keep project scoping
         }
         else {
@@ -2335,7 +2338,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _createNodeTree: function (nodes) {
         try {
             gApp._nodeTree = gApp._stratifyNodeTree(nodes)
-                .sum(function (d) { return 1; });        // Set the dimensions in svg to match
+                .sum(function () { return 1; });        // Set the dimensions in svg to match
             //gApp._nodeTree = nodetree;      //Save for later
             return gApp._nodeTree;
         }
@@ -2693,6 +2696,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         change: gApp._onFilterChange
                     });
                     gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl').hide();
+                    if (gApp.ancestorFilterPlugin._isSubscriber()) {
+                        gApp.down('#applyFiltersBtn').hide();
+                        gApp.down('#chartFiltersTab').hide();
+                    }
                     gApp.advFilters = plugin.getMultiLevelFilters();
                     gApp._kickOff();
                     // gApp._addMultiLevelFilterPlugin();
@@ -2852,6 +2859,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.tabPanel = gApp.down('#filterBox').add(
             {
                 xtype: 'tabpanel',
+                cls: 'blue-tabs',
                 activeTab: 0,
                 plain: true,
                 autoRender: true,
@@ -2877,7 +2885,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         html: '',
                         itemId: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
                         padding: 10,
-                        height: 65
+                        height: 65,
+                        width: '95%'
                     }
                 ]
             });

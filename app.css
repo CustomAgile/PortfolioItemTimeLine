@@ -355,20 +355,34 @@ text.collapse-arrow {
   stroke: black;
 }
 
-.x-tab-bar .x-tab-default {
+.blue-tabs .x-tab-bar .x-tab-default {
   background-color: white;
   border-radius: 4px 4px 0 0;
 }
 
-.x-tab-bar .x-tab-default .x-tab-inner {
+.blue-tabs .x-tab-bar .x-tab-default .x-tab-inner {
   color: #00a9e0;
 }
 
-.x-tab-bar .x-tab-active {
+.blue-tabs .x-tab-bar .x-tab-active {
   background-color: #00a9e0;
 }
 
-.x-tab-bar .x-tab-active .x-tab-inner {
+.blue-tabs .x-tab-bar .x-tab-active .x-tab-inner {
+  color: white;
+}
+
+.blue-tabs .x-tab-bar .x-tab-default .x-tab-inner {
+  text-overflow: initial;
+  -o-text-overflow: initial;
+  overflow: initial;
+}
+
+.blue-tabs .x-tab-bar .x-tab-inner {
+  width: 100%;
+}
+
+.blue-tabs .x-tab-bar .x-tab-default .x-tab-icon-el {
   color: white;
 }
 
@@ -438,16 +452,6 @@ text.collapse-arrow {
   stroke-width: 5;
 }
 
-.x-tab-inner {
-  text-overflow: initial;
-  -o-text-overflow: initial;
-  overflow: initial;
-}
-
-.x-tab-bar .x-tab-inner {
-  width: 100%;
-}
-
 .icon-help {
   cursor: pointer;
 }
@@ -464,9 +468,9 @@ text.collapse-arrow {
   border: #d6d6d6 1px solid;
 }
 
-#scopeTip .x-tip-body, #scopeTip .x-tip-anchor {
+/* #scopeTip .x-tip-body, #scopeTip .x-tip-anchor {
   
-}
+} */
 
 #filter-help-icon {
   /* position: absolute;
@@ -478,8 +482,4 @@ text.collapse-arrow {
 #filter-help-icon span {
   font-size: 14px;
   color: #006488;
-}
-
-.x-tab-default .x-tab-icon-el {
-  color: white;
 }
