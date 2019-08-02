@@ -6,6 +6,7 @@
     "javascript": [
         "node_modules/@agile-central-technical-services/utils-shared-views/index.js",
         "./node_modules/@customagile/ancestor-pi-multi-level-pi-app-filter/index.js",
+        "chart-controls.js",
         "App.js",
         "DateMixin.js",
         "CFDChart.js",

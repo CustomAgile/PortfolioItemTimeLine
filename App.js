@@ -3,8 +3,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     settingsScope: 'project',
     componentCls: 'app',
     config: {
-        tlAfter: 90,  //Half a year approx
-        tlBack: 120, //How many days before today.
+        tlAfter: 90,  // Default days past today for viewport end
+        tlBack: 120, // Default days before today for viewport start
+        viewportDays: 210,
+        zoomFactor: 0.35, // Multiplier for calculating how much to zoom in and out
+        maxZoom: 60, // Number of days to display across viewport before disabling zooming in
+        tlStart: null, // To be set to earliest planned or actual start date in timeline
+        tlEnd: null, // To be set to latest planned or actual end date in timeline
         defaultSettings: {
             hideArchived: true,
             lineSize: 40,
@@ -134,211 +139,634 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return returned;
     },
     _changedItems: [],
-
     itemId: 'rallyApp',
     MIN_COLUMN_WIDTH: 200,        //Looks silly on less than this
-    _rowHeight: 40,               //Leave space for "World view" text
-    STORE_FETCH_FIELD_LIST:
-        [
-            'Name',
-            'FormattedID',
-            'PlannedStartDate',
-            'PlannedEndDate',
-            'ActualStartDate',
-            'ActualEndDate',
-            'Parent',
-            //'Children',
-            'ObjectID',
-            'Project',
-            'DisplayName',
-            'Owner',
-            'PercentDoneByStoryCount',
-            'PercentDoneByStoryPlanEstimate',
-            'PredecessorsAndSuccessors',
-            'State',
-            'Value',
-            'PreliminaryEstimate',
-            //'Predecessors',
-            //'Successors',
-            'OrderIndex',   //Used to get the State field order index
-            'PortfolioItemType',
-            'Ordinal',
-            'Release',
-            //'Iteration',
-            //'Milestones'
-        ],
-    CARD_DISPLAY_FIELD_LIST:
-        [
-            'Name',
-            'Owner',
-            'PreliminaryEstimate',
-            'Parent',
-            'Project',
-            'PercentDoneByStoryCount',
-            'PercentDoneByStoryPlanEstimate',
-            'PlannedStartDate',
-            'PlannedEndDate',
-            'ActualStartDate',
-            'ActualEndDate',
-            'State'
-        ],
+    _rowHeight: 40,
+    STORE_FETCH_FIELD_LIST: [
+        'Name',
+        'FormattedID',
+        'PlannedStartDate',
+        'PlannedEndDate',
+        'ActualStartDate',
+        'ActualEndDate',
+        'Parent',
+        'ObjectID',
+        'Project',
+        'DisplayName',
+        'Owner',
+        'PercentDoneByStoryCount',
+        'PercentDoneByStoryPlanEstimate',
+        'PredecessorsAndSuccessors',
+        'State',
+        'Value',
+        'PreliminaryEstimate',
+        'OrderIndex',   //Used to get the State field order index
+        'PortfolioItemType',
+        'Ordinal',
+        'Release',
+    ],
+    CARD_DISPLAY_FIELD_LIST: [
+        'Name',
+        'Owner',
+        'PreliminaryEstimate',
+        'Parent',
+        'Project',
+        'PercentDoneByStoryCount',
+        'PercentDoneByStoryPlanEstimate',
+        'PlannedStartDate',
+        'PlannedEndDate',
+        'ActualStartDate',
+        'ActualEndDate',
+        'State'
+    ],
 
     items: [
         {
             xtype: 'container',
-            itemId: 'piControlsContainer',
-            flex: 1,
-            layout: {
-                type: 'hbox',
-                align: 'middle',
-                defaultMargins: '0 25 10 0',
-            }
-        },
-        {
-            xtype: 'container',
-            itemId: 'filterBox',
-            margin: '10 0 10 0'
-        },
-        {
-            xtype: 'container',
-            itemId: 'rootSurface',
-            id: 'rootSurface',
-            padding: '10 0 5 0',
             layout: 'auto',
-            width: '98%',
-            title: 'Loading...',
-            autoEl: { tag: 'svg' },
-            listeners: { afterrender: function () { gApp = this.up('#rallyApp'); }, },
-            visible: false
+            items: [
+                {
+                    xtype: 'container',
+                    itemId: 'piControlsContainer',
+                    flex: 1,
+                    width: '99%',
+                    layout: {
+                        type: 'hbox',
+                        align: 'middle',
+                        defaultMargins: '0 25 10 0'
+                    }
+                },
+                {
+                    xtype: 'container',
+                    itemId: 'filterBox',
+                    margin: '10 0 10 0',
+                    width: '99%',
+                    flex: 1
+                },
+                {
+                    xtype: 'container',
+                    itemId: 'timelineContainer',
+                    id: 'timelineContainer',
+                    width: '99%',
+                    overflowX: 'scroll',
+                    height: 'auto',
+                    layout: 'auto',
+                    items: [
+                        {
+                            xtype: 'container',
+                            itemId: 'rootSurface',
+                            id: 'rootSurface',
+                            padding: '10 0 5 0',
+                            layout: 'auto',
+                            width: 5000,
+                            title: 'Loading...',
+                            autoEl: { tag: 'svg' },
+                            listeners: { afterrender: function () { gApp = this.up('#rallyApp'); } },
+                            visible: false
+                        }
+                        // {
+                        //     xtype: 'container',
+                        //     itemId: 'labelSVG',
+                        //     id: 'labelSVG',
+                        //     padding: '10 0 5 0',
+                        //     layout: 'auto',
+                        //     //overflowX: 'scroll',
+                        //     //width: '98%',
+                        //     width: 500,
+                        //     //height: 500,
+                        //     //autoScroll: true,
+                        //     //title: 'Loading...',
+                        //     autoEl: { tag: 'svg' },
+                        //     //listeners: { afterrender: function () { gApp = this.up('#rallyApp'); }, },
+                        //     visible: true
+                        // }
+                    ]
+                }
+            ]
         }
     ],
 
     _nodeTree: null,
 
-    //Continuation point after selectors ready/changed
-    _redrawNodeTree: function () {
+    launch: function () {
+        gApp.ready = false;
+        gApp.loadingTimeline = false;
+        Rally.data.wsapi.Proxy.superclass.timeout = 240000;
+        Rally.data.wsapi.batch.Proxy.superclass.timeout = 240000;
+
+        gApp.down('#piControlsContainer').add([
+            {
+                xtype: 'container',
+                id: 'piTypeContainer',
+                layout: {
+                    type: 'hbox',
+                    align: 'middle'
+                }
+            },
+            {
+                xtype: 'rallycombobox',
+                itemId: 'scopeCombobox',
+                stateful: true,
+                stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.projectScopeControl'),
+                stateEvents: ['select'],
+                displayField: 'text',
+                valueField: 'value',
+                fieldLabel: 'Scope ',
+                afterLabelTextTpl: "<span id='scope-help-icon' style='font-size:12px' class='icon-help'> </span>",
+                labelStyle: 'font-size: 14px',
+                labelWidth: 60,
+                storeConfig: {
+                    fields: ['text', 'value'],
+                    data: [{
+                        text: "Current Project(s)",
+                        value: false
+                    }, {
+                        text: "Any Project",
+                        value: true
+                    }]
+                },
+                listeners: {
+                    scope: this,
+                    change: function () {
+                        gApp._onScopeChange();
+                    },
+                    afterrender: function (tooltip) {
+                        Ext.create('Rally.ui.tooltip.ToolTip', {
+                            target: (tooltip.labelEl && tooltip.labelEl.dom.children.length && tooltip.labelEl.dom.children[0]) || tooltip.labelEl,
+                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results will be limited</p></div>',
+                            itemId: 'scopeTip',
+                            id: 'scopeTip',
+                            showDelay: 200
+                        });
+                    }
+                },
+            }
+        ]);
+
+        gApp.tabPanel = gApp.down('#filterBox').add(
+            {
+                xtype: 'tabpanel',
+                cls: 'blue-tabs',
+                activeTab: 0,
+                plain: true,
+                autoRender: true,
+                minTabWidth: 140,
+                items: [
+                    {
+                        title: 'Chart Controls',
+                        html: '',
+                        itemId: 'chartControlsTab'
+                    },
+                    {
+                        title: 'Filters',
+                        html: '',
+                        itemId: 'chartFiltersTab',
+                        padding: 0
+                        // tabConfig: {
+                        //     tooltip: '<div><p>After setting all of your desired filters, click the green button to apply the filters and refresh the timeline. Clicking the "Clear All" button will automatically remove all filters and refresh the timeline</p><p>When filters are active, the timeline will remove all portfolio items that have no children (excluding the lowest level PI), starting from the lowest filtered portfolio item type and working up the hierarchy.</p><p>Example: If you filter by feature owner, then all epics without any features fitting the filter criteria will not show on the timeline.</p></div>'
+                        // },
+                        // iconCls: 'icon-help'
+                    },
+                    {
+                        title: 'Ancestor Chooser',
+                        html: '',
+                        itemId: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
+                        padding: 10,
+                        height: 65,
+                        width: '95%'
+                    }
+                ]
+            });
+
+        gApp.down('#filterBox').on('resize', gApp._setTimelineHeight);
+        gApp._addAncestorPlugin();
+    },
+
+    _kickOff: async function () {
+        // variable to bind to the expand/collapse all button on timeline
+        gApp.expandData = [{ expanded: true }];
+        gApp._typeStore = gApp.ancestorFilterPlugin.portfolioItemTypes;
+
+        var childTypes = gApp._getTypeList(gApp._highestOrdinal() - 1);
+        var childModels = [];
+        _.each(childTypes, function (model) { childModels.push(model.Type); });
+
+        gApp.tabPanel.child('#chartControlsTab').add({
+            xtype: 'chartControls',
+            cmp: gApp
+        });
+
+        await gApp._updatePiTypeList();
+        await gApp._addSharedViewsCombo();
+        document.getElementById('timelineContainer').onscroll = gApp._timelineScrolled;
+        gApp._updateFilterTabText();
+        gApp._updateAncestorTabText();
+        gApp.ready = true;
+        gApp._refreshTimeline();
+    },
+
+    _addAncestorPlugin: function () {
+        gApp.down('#chartFiltersTab').add([
+            {
+                xtype: 'container',
+                itemId: 'chartFilterButtonArea',
+                margin: 5,
+                layout: {
+                    type: 'hbox',
+                    align: 'middle',
+                    defaultMargins: '0 15 15 0'
+                },
+                items: [
+                    {
+                        xtype: 'rallybutton',
+                        itemId: 'applyFiltersBtn',
+                        handler: gApp._applyFilters,
+                        text: 'Apply filters to timeline',
+                        cls: 'apply-filters-button',
+                        disabled: true
+                    }
+                ]
+            },
+            {
+                xtype: 'container',
+                itemId: 'chartFilterPanelArea',
+                margin: 5,
+                layout: {
+                    type: 'hbox'
+                }
+            }
+        ]);
+
+        gApp.ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
+            ptype: 'UtilsAncestorPiAppFilter',
+            pluginId: 'ancestorFilterPlugin',
+            panelRenderAreaId: 'chartFilterPanelArea',
+            btnRenderAreaId: 'chartFilterButtonArea',
+            filtersHidden: false,
+            allowNoEntry: false,
+            labelStyle: 'font-size: 14px',
+            ownerLabel: '',
+            ownerLabelWidth: 0,
+            settingsConfig: {
+                labelWidth: 150,
+                padding: 10
+            },
+            listeners: {
+                scope: gApp,
+                ready: function (plugin) {
+                    plugin.addListener({
+                        scope: gApp,
+                        select: function () {
+                            gApp._onAncestorFilterChange();
+                        },
+                        change: gApp._onFilterChange
+                    });
+                    gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl').hide();
+                    if (gApp.ancestorFilterPlugin._isSubscriber()) {
+                        gApp.down('#applyFiltersBtn').hide();
+                        gApp.down('#chartFiltersTab').hide();
+                    }
+                    gApp.advFilters = plugin.getMultiLevelFilters();
+                    gApp._kickOff();
+                },
+                single: true
+            }
+        });
+        gApp.addPlugin(gApp.ancestorFilterPlugin);
+    },
+
+    _refreshTimeline: async function () {
+        // Lots of listeners and events. Lets ensure the timeline only loads once
+        if (gApp.loadingTimeline || gApp.settingView || !gApp.ready) { return; }
+        gApp._removeSVGTree();
+        gApp._clearNodes();
+
+        // Reset height so the loading mask shows properly
+        var rs = gApp.down('#rootSurface');
+        rs.getEl().setHeight(300);
+
+        gApp.setLoading('Loading timeboxes...');
+        gApp.loadingTimeline = true;
+
+        await gApp._getDefaultProjectID();
+
+        if (!gApp.releases) {
+            await gApp._getReleases();
+        }
+
+        if (!gApp.iterations) {
+            await gApp._getIterations();
+        }
+
+        if (!gApp.milestones) {
+            await gApp._getMilestones();
+        }
+
+        gApp.setLoading('Loading portfolio items...');
+
+        return new Promise(function (resolve, reject) {
+            if (gApp._isAncestorSelected()) {
+                // Ancestor plugin gives us the ref and typepath, so we need to fetch
+                // the actual record before proceeding
+                var piData = gApp.ancestorFilterPlugin._getValue();
+                gApp._fetchRecordByRef(piData, function (store, records, success) {
+                    if (success) {
+                        if (records && records.length) {
+                            records[0].id = 'root';
+                            gApp.expandData[0].expanded = true;
+                            gApp._getArtifactsFromRoot(records, resolve, reject);
+                        }
+                        else { reject('Failed to retrieve selected portfolio item. Please reload and try again.'); }
+                    }
+                    else { reject('Failed to retrieve selected portfolio item. Please reload and try again.'); }
+                });
+            }
+            // No ancestor selected, load all PIs starting at selected type
+            else {
+                var topType = gApp._getTopLevelType();
+                if (topType) {
+                    gApp.expandData[0].expanded = false;
+                    gApp._getArtifacts(topType, resolve, reject);
+                }
+                else { resolve(); }
+            }
+        }).then(
+            // RESOLVE
+            function () {
+                gApp._removeChildlessNodes();
+                gApp._findDateRange();
+                gApp._recalculateTree();
+                if (!gApp._isAncestorSelected()) { gApp._collapseAll(); }
+            },
+            // REJECT
+            function (error) {
+                console.log(error);
+                gApp._showError(gApp._parseError(error, 'Failed while fetching portfolio items. Please reload and try again.'));
+            }
+        ).finally(function () {
+            gApp.setLoading(false);
+            gApp.loadingTimeline = false;
+        });
+    },
+
+    _buildConfig: function (type, parentRecords) {
+        var dataContext = gApp.getContext().getDataContext();
+        var typePath = type.get('TypePath');
+        var filters = gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath);
+        var scopeAllProjects = gApp.down('#scopeCombobox').getValue();
+        var topLevelTypePath = gApp.down('#piTypeCombobox').getValue();
+
+        // If scoping is set to all projects and we're retrieving the top level PIs
+        // we  limit the results for performance reasons
+        var pagesize = 800;
+        if (scopeAllProjects && typePath === topLevelTypePath) {
+            let ord = gApp._getOrdFromTypePath(typePath);
+            if (ord) {
+                if (ord === 1) {
+                    pagesize = 200;
+                }
+                else if (ord === 2) {
+                    pagesize = 100;
+                }
+                else {
+                    pagesize = 30;
+                }
+            }
+        }
+
+        var config = {
+            model: typePath,
+            sorters: [{
+                property: 'DragAndDropRank',
+                direction: 'ASC'
+            }],
+            pageSize: pagesize,
+            limit: pagesize,
+            fetch: gApp.STORE_FETCH_FIELD_LIST,
+            filters: []
+        };
+        if (gApp.getSetting('hideArchived')) {
+            config.filters.push({
+                property: 'Archived',
+                operator: '=',
+                value: false
+            });
+        }
+
+        if (filters && filters.length) {
+            config.filters = config.filters.concat(filters);
+        }
+
+        if (!scopeAllProjects && typePath === topLevelTypePath) {
+            // Keep project scoping
+        }
+        else {
+            dataContext.project = null;
+        }
+
+        // Parents have been filtered so we only want children underneath those
+        // parents that were returned to avoid breaking the tree
+        if (parentRecords) {
+            config.enablePostGet = true;
+
+            var parentIds = [];
+
+            _.each(parentRecords, function (parent) {
+                parentIds.push(parent.get('ObjectID'));
+            });
+
+            var parentFilter = new Rally.data.wsapi.Filter({
+                property: 'Parent.ObjectID',
+                operator: 'in',
+                value: parentIds
+            });
+            parentFilter.toString = function () { return '(Parent.ObjectID in ,' + parentIds.join(',') + ')'; };
+            config.filters.push(parentFilter);
+        }
+
+        config.context = dataContext;
+
+        return Ext.clone(config);
+    },
+
+    _getArtifactsFromRoot: function (records, resolve, reject) {
+        if (records.length) {
+            gApp._nodes = gApp._nodes.concat(gApp._createNodes(records));
+            gApp.setLoading(`Loading portfolio items... (${gApp._nodes.length} fetched so far)`);
+            var childType = gApp._findChildType(records[0]);
+
+            if (childType) {
+                try {
+                    let promises = [];
+                    let maxResults = 5;
+                    while (records.length) {
+                        let chunk = records.splice(0, maxResults);
+                        let config = gApp._buildConfig(childType, chunk);
+                        promises.push(new Promise(function (newResolve, newReject) {
+                            Ext.create('Rally.data.wsapi.Store', config).load()
+                                .then({
+                                    success: function (results) {
+                                        gApp._getArtifactsFromRoot(results, newResolve, newReject);
+                                    },
+                                    failure: function (error) { newReject(error); },
+                                    scope: this
+                                });
+                        }));
+                    }
+                    Promise.all(promises).then(resolve, function (e) { reject(e); });
+                }
+                catch (e) { reject(e); }
+            }
+            else { resolve(); }
+        }
+        else { resolve(); }
+    },
+
+    _getArtifacts: function (topType, resolve, reject) {
+        var config = gApp._buildConfig(topType);
+        try {
+            Ext.create('Rally.data.wsapi.Store', config).load()
+                .then({
+                    success: function (results) {
+                        gApp._nodes = gApp._createNodes([{
+                            id: 'root',
+                            parent: null,
+                            data: {
+                                '_ref': 'root',
+                                Parent: null,
+                                ObjectID: 'root',
+                                FormattedID: 'root',
+                                _type: 'root'
+                            },
+                            get: function (fieldName) {
+                                return this.data[fieldName] || null;
+                            }
+                        }]);
+                        if (!results.length) {
+                            reject(`No Portfolio Items of type ${topType.get('Name')} found within this project (or selected scoping)`);
+                            return;
+                        }
+                        else {
+                            _.forEach(results, function (record) {
+                                record.data.Parent = { '_ref': 'root', ObjectID: 'root' };
+                            });
+
+                            let ord = topType.get('Ordinal');
+
+                            // The higher the top level, the more we want to break up the results due
+                            // to using a recursive function to build the hierarchy
+                            let maxResults = (function (ord) {
+                                switch (ord) {
+                                    case 0:
+                                        return 10000;
+                                    case 1:
+                                        return 10;
+                                    case 2:
+                                        return 4;
+                                    default:
+                                        return 1;
+                                }
+                            })(ord);
+                            if (results.length <= maxResults) {
+                                gApp._getArtifactsFromRoot(results, resolve, reject);
+                            } else {
+                                let promises = [];
+                                while (results.length) {
+                                    promises.push(new Promise(function (newResolve, newReject) {
+                                        if (results.length >= maxResults) {
+                                            gApp._getArtifactsFromRoot(results.splice(0, maxResults), newResolve, newReject);
+                                        } else {
+                                            gApp._getArtifactsFromRoot(results.splice(0, results.length), newResolve, newReject);
+                                        }
+                                    }));
+                                }
+                                Promise.all(promises).then(resolve, function (e) { reject(e); });
+                            }
+                        }
+                    },
+                    failure: function (error) { reject(error); },
+                    scope: this
+                });
+        }
+        catch (e) { reject(e); }
+    },
+
+    _recalculateTree: function () {
         if (gApp._nodes.length === 0) { return; }
         gApp._rowHeight = gApp.getSetting('lineSize') || 40;
 
-        //Get all the nodes and the "Unknown" parent virtual nodes
         var nodetree = gApp._createNodeTree(gApp._nodes);
         if (!nodetree) { return; }
 
         gApp._setSVGDimensions(nodetree);
-        gApp._startTreeAgain();
-    },
-
-    _switchChildren: function (d) {
-        if (d.children) { gApp._collapse(d); }
-        else { gApp._expand(d); }
-        gApp._rescaledStart();
-    },
-
-    _collapse: function (d) {
-        if (d.children) {
-            d._children = d.children;
-            d.children = null;
-            d._value = d.value;
-            d.value = 1;
-        }
-    },
-
-    _expand: function (d) {
-        if (d._children) {
-            d.children = d._children;
-            d._children = null;
-            d.value = d._value;
-            d._value = 1;
-        }
-    },
-
-    _collapseAll: function () {
-        if (gApp.expandables) {
-            gApp.expandables.each(function (d) { gApp._collapse(d); });
-        } else {
-            d3.selectAll('.collapse-icon').dispatch('collapseAll');
-        }
-        gApp._rescaledStart();
-    },
-
-    _collapseChildren: function (d) {
-        if (d && d.length) {
-            _.each(d, function (c) {
-                gApp._collapseChildren(c._children);
-                gApp._collapse(c);
-            });
-        }
-    },
-
-    _expandChildren: function (d) {
-        if (d && d.length) {
-            _.each(d, function (c) {
-                gApp._expandChildren(c._children);
-                gApp._expand(c);
-            });
-        }
-    },
-
-    _expandAll: function () {
-        gApp.setLoading(true);
-        if (gApp.expandables) {
-            gApp.expandables.each(function (d) {
-                gApp._expandChildren(d._children);
-                gApp._expand(d);
-
-            });
-            gApp._rescaledStart();
-        } else {
-            for (let i = 0; i < gApp._getTopLevelTypeOrdinal(); i++) {
-                d3.selectAll('.collapse-icon').dispatch('expandAll');
-                gApp._rescaledStart();
-            }
-        }
-        gApp.setLoading(false);
+        gApp._initialiseScale();
     },
 
     _initialiseScale: function () {
-        var timebegin = new Date(Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack));
-        var timeend = new Date(Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter));
+        gApp.viewportDays = gApp.tlBack + gApp.tlAfter;
+        gApp._setAxisDateFields(gApp.tlStart, gApp.tlEnd);
+    },
 
-        // If ancestor has planned dates, set axis to them
-        if (gApp._isAncestorSelected() && gApp._nodes && gApp._nodes.length) {
-            var start = gApp._nodes[0].record.get('PlannedStartDate');
-            var end = gApp._nodes[0].record.get('PlannedEndDate');
-
-            if (start) {
-                timebegin = start;
-                if (!end) {
-                    timeend = Ext.Date.add(timebegin, Ext.Date.DAY, 180);
-                }
-            }
-            if (end) {
-                timeend = end;
-                if (!start) {
-                    timebegin = Ext.Date.subtract(timebegin, Ext.Date.DAY, 180);
-                }
-            }
+    // Used to set both axis dates without triggering the redraw twice
+    _setAxisDateFields: function (start, end) {
+        if (end < start) {
+            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
+            return;
         }
-        gApp._setAxisDateFields(timebegin, timeend);
+
+        var startDateField = gApp.down('#axisStartDate');
+        var endDateField = gApp.down('#axisEndDate');
+
+        startDateField.suspendEvents(false);
+        endDateField.suspendEvents(false);
+
+        startDateField.setValue(start);
+        endDateField.setValue(end);
+
+        startDateField.resumeEvents();
+        endDateField.resumeEvents();
+
+        // gApp._setTimeScaler(start, end);
+        gApp._redrawTree();
     },
 
     _setTimeScaler: function (timebegin, timeend) {
         gApp.dateScaler = d3.scaleTime()
             .domain([timebegin, timeend])
             .range([0, parseInt(d3.select('#rootSurface').attr('width')) - (gApp._rowHeight + 10)]);
+        //.range([0, gApp.down('#timelineContainer').getWidth() - (gApp._rowHeight + 10)]);
     },
+
+    _redrawTree: function () {
+        if (gApp.settingView || !gApp._timelineHasItems()) { return; }
+
+        gApp._clearSharedViewCombo();
+        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
+        gApp._removeSVGTree();
+        gApp._createSVGTree();
+        gApp._setAxis();
+        gApp.currentScrollX = document.getElementById('timelineContainer').scrollLeft;
+        // gApp.previousTimelineWidth = document.getElementById('timelineContainer').scrollWidth;
+        gApp._updateRowLabelLocations();
+    },
+
+    // _resetAxis: function () {
+    //     gApp.viewportDays = gApp.tlBack + gApp.tlAfter;
+
+    // },
 
     _setAxis: function () {
         if (gApp.settingView || !gApp._timelineHasItems()) { return; }
 
         gApp._clearSharedViewCombo();
+        // gApp._timelineScrolled({ currentTarget: { scrollLeft: 0 } });
 
         if (gApp.gX) { gApp.gX.remove(); }
 
         var showCalendarTicks = gApp.down('#dateGridlineCheckbox').getValue();
         var topPadding = 35;
-        topPadding += gApp.down('#releasesCheckbox').getValue() ? 25 : 0;
-        topPadding += gApp.down('#iterationsCheckbox').getValue() ? 26 : 0;
+        topPadding += gApp._showReleaseHeader() ? 25 : 0;
+        topPadding += gApp._showIterationHeader() ? 26 : 0;
         var svg = d3.select('#rootSurface');
         var width = +svg.attr('width');
         var height = +svg.attr('height');
@@ -454,6 +882,20 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
     },
 
+    // Called when user clicks on an item in the timeline
+    // Sets the timeline view to the planned dates for that item
+    _setViewportToPi: function (d) {
+        let piPadding = 2;
+        let start = d.data.record.get('PlannedStartDate');
+        let end = d.data.record.get('PlannedEndDate');
+        let viewportStartInDays = gApp._daysBetween(start, gApp.tlStart);
+        viewportStartInDays -= viewportStartInDays > 5 ? piPadding : 0;
+
+        gApp.viewportDays = gApp._daysBetween(end, start) + piPadding * 2;
+        gApp.currentScrollX = gApp._getViewportScaler() * viewportStartInDays;
+        gApp._redrawTree();
+    },
+
     _addHoverTooltip: function (hoverEl, hoverElClass, tipId, tipText, width, height) {
         let coords = d3.mouse(hoverEl);
         let tooltip = d3.select('#rootSurface').append('g')
@@ -495,11 +937,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.ancestorFilterPlugin._clearAllFilters();
         let clearFilters = gApp.ancestorFilterPlugin.getMultiLevelFilterStates();
 
+        gApp.viewportDays = gApp.tlBack + gApp.tlAfter;
+
         gApp.setCurrentView({
             piTypeCombobox: gApp._getTopLevelTypePath(),
             scopeCombobox: false,
-            axisStartDate: new Date(Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack)),
-            axisEndDate: new Date(Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter)),
+            axisStartDate: gApp.tlStart,
+            axisEndDate: gApp.tlEnd,
             axisLabels: {
                 dates: gApp.getSetting('calendarOverlay'),
                 iterations: gApp.getSetting('iterationOverlay'),
@@ -525,28 +969,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
     },
 
-    _setAxisDateFields: function (start, end) {
-        if (end < start) {
-            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
-            return;
-        }
-
-        var startDateField = gApp.down('#axisStartDate');
-        var endDateField = gApp.down('#axisEndDate');
-
-        startDateField.suspendEvents(false);
-        endDateField.suspendEvents(false);
-
-        startDateField.setValue(start);
-        endDateField.setValue(end);
-
-        startDateField.resumeEvents();
-        endDateField.resumeEvents();
-
-        gApp._setTimeScaler(start, end);
-        gApp._rescaledStart();
-    },
-
     _onAxisDateChange: function () {
         var axisStart = gApp.down('#axisStartDate');
         var startDate = axisStart.getValue();
@@ -559,8 +981,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             return;
         }
 
-        gApp._setTimeScaler(startDate, endDate);
-        gApp._rescaledStart();
+        // gApp._setTimeScaler(startDate, endDate);
+        gApp._redrawTree();
     },
 
     _timelineHasItems: function () {
@@ -573,61 +995,140 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return true;
     },
 
-    _zoomedStart: function () {
-        if (gApp.settingView || !gApp._timelineHasItems()) { return; }
+    // Called when the user scrolls the timeline
+    // Translates the portfolio item labels so they remain on the left side of the screen
+    _timelineScrolled: function (e) {
+        let x = e.currentTarget.scrollLeft;
 
-        gApp._clearSharedViewCombo();
-
-        var startDate = gApp.down('#axisStartDate').getValue();
-        var endDate = gApp.down('#axisEndDate').getValue();
-        if (startDate && endDate) {
-            gApp.down('#zoomInBtn').setDisabled(Rally.util.DateTime.getDifference(startDate, endDate, 'day') < 30);
-        }
-        gApp._removeSVGTree();
-        gApp._addSVGTree();
-        gApp._refreshTree();
+        // Return if user is scrolling vertically
+        if (x === gApp.currentScrollX) { return; }
+        gApp.currentScrollX = x;
+        // gApp.previousTimelineWidth = document.getElementById('timelineContainer').scrollWidth;
+        gApp.currentScrollPercent = gApp._getHorizontalScrollPercent();
+        gApp._updateRowLabelLocations();
     },
 
-    _rescaledStart: function () {
-        gApp._zoomedStart();
-        gApp._setAxis();
-    },
+    _updateRowLabelLocations: function () {
+        // let groups = document.getElementById('rootSurface').getElementsByClassName('timelineRowText');
+        // _.each(groups, function (g) {
+        //     let transformation = window.getComputedStyle(g).getPropertyValue("transform").match(/(-?[0-9\.]+)/g);
+        //     if (transformation && transformation.length >= 6) {
+        //         let transform = 'translate(' + gApp.currentScrollX + ',' + transformation[5] + ')';
+        //         g.setAttribute('transform', transform);
+        //     }
+        // }, this);
 
-    _startTreeAgain: function () {
-        gApp._initialiseScale();
-        gApp._rescaledStart();
+        // let labelGroup = document.getElementById('rowLabelGroup');
+        d3.select('#rowLabelGroup').attr('transform', `translate(${gApp.currentScrollX},0)`);
+
+        let expandAll = document.getElementById('expandAllText');
+        // let transformation = window.getComputedStyle(expandAll).getPropertyValue("transform").match(/(-?[0-9\.]+)/g);
+        // let transform = 'translate(' + gApp.currentScrollX + ',' + transformation[5] + ')';
+        expandAll.setAttribute('x', gApp.currentScrollX);
     },
 
     _zoom: function (zoomIn) {
-        var axisStart = gApp.down('#axisStartDate');
-        var startDate = axisStart.getValue();
-        var axisEnd = gApp.down('#axisEndDate');
-        var endDate = axisEnd.getValue();
-        var zoomDays = 14;
+        let timelineDays = gApp._daysBetween(gApp.tlEnd, gApp.tlStart);
+        let zoomVal = gApp._getZoomValue();
 
-        if (zoomIn) {
-            startDate = Ext.Date.add(startDate, Ext.Date.DAY, zoomDays);
-            endDate = Ext.Date.subtract(endDate, Ext.Date.DAY, zoomDays);
-        }
-        else {
-            startDate = Ext.Date.subtract(startDate, Ext.Date.DAY, zoomDays);
-            endDate = Ext.Date.add(endDate, Ext.Date.DAY, zoomDays);
-        }
+        gApp.viewportDays = zoomIn ?
+            _.max([gApp.maxZoom, gApp.viewportDays - zoomVal]) :
+            _.min([timelineDays, gApp.viewportDays + zoomVal]);
 
-        if (startDate < endDate || !zoomIn) {
-            if (Rally.util.DateTime.getDifference(endDate, startDate, 'day') < (zoomDays * 2)) {
-                gApp.down('#zoomInBtn').setDisabled(false);
-            }
+        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
+        gApp.down('#zoomOutBtn').setDisabled(gApp.viewportDays === timelineDays);
 
-            gApp._setAxisDateFields(startDate, endDate);
+        gApp._redrawTree();
+    },
+
+    _getZoomValue() {
+        return Math.round(gApp.viewportDays * gApp.zoomFactor);
+    },
+
+    _switchChildren: function (d) {
+        if (d.children) { gApp._collapse(d); }
+        else { gApp._expand(d); }
+        gApp._redrawTree();
+    },
+
+    _collapse: function (d) {
+        if (d.children) {
+            d._children = d.children;
+            d.children = null;
+            d._value = d.value;
+            d.value = 1;
         }
     },
 
-    _setTimeline: function (d) {
-        var start = d.data.record.get('PlannedStartDate');
-        var end = d.data.record.get('PlannedEndDate');
+    _expand: function (d) {
+        if (d._children) {
+            d.children = d._children;
+            d._children = null;
+            d.value = d._value;
+            d._value = 1;
+        }
+    },
 
-        gApp._setAxisDateFields(start, end);
+    _collapseAll: function () {
+        if (gApp.expandables) {
+            gApp.expandables.each(function (d) { gApp._collapse(d); });
+        } else {
+            d3.selectAll('.collapse-icon').dispatch('collapseAll');
+        }
+        gApp._redrawTree();
+    },
+
+    _collapseChildren: function (d) {
+        if (d && d.length) {
+            _.each(d, function (c) {
+                gApp._collapseChildren(c._children);
+                gApp._collapse(c);
+            });
+        }
+    },
+
+    _expandChildren: function (d) {
+        if (d && d.length) {
+            _.each(d, function (c) {
+                gApp._expandChildren(c._children);
+                gApp._expand(c);
+            });
+        }
+    },
+
+    _expandAll: function () {
+        gApp.setLoading(true);
+        if (gApp.expandables) {
+            gApp.expandables.each(function (d) {
+                gApp._expandChildren(d._children);
+                gApp._expand(d);
+
+            });
+            gApp._redrawTree();
+        } else {
+            for (let i = 0; i < gApp._getTopLevelTypeOrdinal(); i++) {
+                d3.selectAll('.collapse-icon').dispatch('expandAll');
+                gApp._redrawTree();
+            }
+        }
+        gApp.setLoading(false);
+    },
+
+    _viewportHasVerticalScroll: function () {
+        let vp = document.getElementById('timelineContainer');
+        return vp && vp.clientHeight !== vp.scrollHeight;
+    },
+
+    _getRemainingWindowHeight: function () {
+        let filterHeight = gApp.down('#filterBox').getHeight();
+        let controlsHeight = gApp.down('#piControlsContainer').getHeight();
+        let appHeight = gApp.getHeight();
+
+        return appHeight - filterHeight - controlsHeight - 40;
+    },
+
+    _setTimelineHeight: function () {
+        gApp.down('#timelineContainer').setHeight(gApp._getRemainingWindowHeight());
     },
 
     _getSVGHeight: function () {
@@ -635,13 +1136,48 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _setSVGDimensions: function (nodetree) {
-        var svg = d3.select('#rootSurface');
-        svg.attr('height', gApp._rowHeight * (nodetree.value + 1 + (gApp.down('#releasesCheckbox').getValue() ? 1 : 0) + (gApp.down('#iterationsCheckbox').getValue() ? 1 : 0)));
-        //Make surface the size available in the viewport (minus the selectors and margins)
-        var rs = gApp.down('#rootSurface');
+        let svg = d3.select('#rootSurface');
+        let rs = gApp.down('#rootSurface');
+        let timelineContainer = gApp.down('#timelineContainer').getEl();
+        let viewportWidth = timelineContainer.getWidth();
+        let viewportScaler = gApp._getViewportScaler();
+        let timelineWidth = viewportScaler === 1 ? viewportWidth - 20 : gApp._daysBetween(gApp.tlEnd, gApp.tlStart) * viewportScaler;
+
+        svg.attr('height', gApp._rowHeight * (nodetree.value + 1 + (gApp._showReleaseHeader() ? 1 : 0) + (gApp._showIterationHeader() ? 1 : 0)));
         rs.getEl().setHeight(svg.attr('height'));
-        svg.attr('width', rs.getEl().getWidth());
+        rs.getEl().setWidth(timelineWidth);
+        svg.attr('width', timelineWidth);
         svg.attr('class', 'rootSurface');
+
+        if (gApp.currentScrollX && gApp.previousTimelineWidth) {
+            timelineContainer.setScrollLeft(gApp.currentScrollX + Math.round((timelineWidth - gApp.previousTimelineWidth) / 2));
+            // timelineContainer.setScrollLeft(gApp.currentScrollPercent * timelineContainer.dom.scrollWidth);
+        }
+        else {
+            timelineContainer.setScrollLeft((gApp._daysBetween(new Date(), gApp.tlStart) - gApp._daysBetween(new Date(), Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack))) * viewportScaler);
+        }
+
+        gApp.previousTimelineWidth = timelineWidth;
+        gApp._setTimeScaler(gApp.tlStart, gApp.tlEnd);
+    },
+
+    // Returns the number of pixels per day given the current
+    // viewport width and number of days to show in the viewport
+    _getViewportScaler: function () {
+        var viewportWidth = gApp.down('#timelineContainer').getEl().getWidth();
+        if (gApp._viewportHasVerticalScroll()) {
+            viewportWidth -= 15;
+        }
+        return (Math.round(viewportWidth / (gApp.viewportDays || 1))) || 1;
+    },
+
+    _getHorizontalScrollPercent: function () {
+        let vp = document.getElementById('timelineContainer');
+        return vp.scrollLeft / ((vp.scrollWidth - vp.clientWidth) || vp.clientWidth);
+    },
+
+    _daysBetween: function (endDate, startDate) {
+        return Rally.util.DateTime.getDifference(endDate, startDate, 'day');
     },
 
     _itemMenu: function (d) {
@@ -678,7 +1214,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var e = gApp.dateScaler(d.endX);
 
         d.drawnX = x;
-        d.drawnY = -(gApp._rowHeight / 1.5) - (gApp.down('#iterationsCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0);
+        d.drawnY = -(gApp._rowHeight / 1.5) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0);
         d.drawnWidth = e - d.drawnX;
         d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
         d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
@@ -709,21 +1245,30 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         d.actualTranslate = "translate(" + d.actualDrawnX + "," + d.actualDrawnY + ")";
     },
 
-    _refreshTree: function () {
+    _initTextRowTranslate: function (d) {
+        var svgHeight = gApp._getSVGHeight();
+        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
+        d.textDrawnX = 0;
+        d.textTranslate = "translate(" + d.textDrawnX + "," + d.plannedDrawnY + ")";
+    },
+
+    _createSVGTree: function () {
         var symbolWidth = 20;
         gApp._nodeTree.sum(function () { return 1; });
         var partition = d3.partition();
         var nodetree = partition(gApp._nodeTree);
 
         gApp._setSVGDimensions(nodetree);
+        gApp._initializeSVG();
 
         // Expand / Collapse all
         d3.select('#zoomTree').selectAll('.expandAll')
             .data(gApp.expandData)
             .enter().append('g')
             .append('text')
+            .attr('id', 'expandAllText')
             .attr('x', -40)
-            .attr('y', -15 - (gApp.down('#releasesCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0) - (gApp.down('#iterationsCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0))
+            .attr('y', -15 - (gApp._showReleaseHeader() ? gApp._rowHeight / 1.5 : 0) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0))
             .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
             .attr('alignment-baseline', 'central')
             .text(function (d) { return d.expanded ? '9' : '7'; })
@@ -732,7 +1277,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
             });
 
-        if (gApp.down('#releasesCheckbox').getValue()) {
+        if (gApp._showReleaseHeader()) {
             var releases = d3.select('#zoomTree').selectAll(".releaseNode")
                 .data(gApp.releases)
                 .enter().append("g")
@@ -759,10 +1304,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         }
 
-        if (gApp.down('#iterationsCheckbox').getValue()) {
-            var iterations = d3.select('#zoomTree').selectAll(".iterationNode")
+        if (gApp._showIterationHeader()) {
+            var iterations = d3.select('#zoomTree').selectAll('.iterationNode')
                 .data(gApp.iterations)
-                .enter().append("g")
+                .enter().append('g')
                 .attr('class', 'iterationNode')
                 .attr('id', function (d) { return 'iteration-' + d.get('Name'); })
                 .attr('transform', function (d) {
@@ -770,7 +1315,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     return d.translate;
                 });
 
-            // Release bars
+            // Iteration bars
             iterations.append('rect')
                 .attr('width', function (d) { return d.drawnWidth; })
                 .attr('height', gApp._rowHeight / 2)
@@ -778,7 +1323,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 .attr('stroke', '#808080')
                 .attr('stroke-opacity', 0.5);
 
-            // Release Name
+            // Iteration Name
             iterations.append('text')
                 .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
                 .attr('y', gApp._rowHeight / 4 + 3)
@@ -786,7 +1331,20 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         }
 
-        //Let's scale to the dateline
+        var labelGroup = d3.select('#zoomTree').append('g')
+            .attr('id', 'rowLabelGroup');
+
+        var labelGroupRows = labelGroup.selectAll('.textRows')
+            .data(nodetree.descendants())
+            .enter().filter(function (d) { return d.data.record.id === "root" ? gApp._shouldShowRoot() : true; })
+            .append("g")
+            .attr('class', function (d) { return 'timelineRowText' + ((d.children || d._children) ? ' childrenText' : ''); })
+            .attr('transform', function (d) {
+                gApp._initTextRowTranslate(d);
+                return d.textTranslate;
+            });
+
+
         var rows = d3.select('#zoomTree').selectAll(".node")
             .data(nodetree.descendants())
             .enter().filter(function (d) { return d.data.record.id === "root" ? gApp._shouldShowRoot() : true; })
@@ -845,10 +1403,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
 
         // Planned date bars
-        plannedRows
-            .filter(function (d) {
-                return d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate');
-            })
+        plannedRows.filter(function (d) {
+            return d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate');
+        })
             .append('rect')
             .attr('id', function (d) { return 'rect-' + d.data.Name; })
             .attr('rx', gApp._rowHeight / 6)
@@ -862,28 +1419,23 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
             .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
             .on('click', function (d) {
-                //Browsers get confused over the shift key (think it's 'selectAll')
-                // if (d3.event.altKey) {
-                // gApp._dataPanel(d, idx, arr);
-                // } else 
                 if (!d3.event.altKey && d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
-                    gApp._setTimeline(d);
+                    gApp._setViewportToPi(d);
                 }
             });
 
+        // var textRows = rows.append("g").attr('class', function (d) { return 'timelineRowText' + ((d.children || d._children) ? ' childrenText' : ''); })
+        //     .attr('transform', function (d) {
+        //         return d.textTranslate;
+        //     });
+
         // Triple bar symbol (hamburger button)
-        plannedRows.append('text')
+        labelGroupRows.append('text')
             .attr('y', gApp._rowHeight / 4)
-            .attr('x', function (d) { return 5 - d.plannedDrawnX + (d.depth * 10); })
+            .attr('x', function (d) { return 5 - d.textDrawnX + (d.depth * 10); })
             .attr('alignment-baseline', 'central')
             .text('V')
-            .attr('class', function () {
-                var lClass = 'icon-gear app-menu';
-                // if (!d.data.record.get('PlannedStartDate') || !d.data.record.get('PlannedEndDate')) {
-                //     lClass += ' error';
-                // }
-                return lClass;
-            })
+            .attr('class', 'icon-gear app-menu')
             .on('click', function (d) { gApp._itemMenu(d); });
 
         // hamburgers.append('span')
@@ -891,9 +1443,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         //     .text(function (d) { return 'Edit ' + d.data.record.get('FormattedID'); });
 
         // PI ID and Name text
-        plannedRows.append('text')
+        labelGroupRows.append('text')
             .attr('id', function (d) { return 'text-' + d.data.Name; })
-            .attr('x', function (d) { return symbolWidth + 5 - d.plannedDrawnX + (d.depth * 10); })
+            .attr('x', function (d) { return symbolWidth + 5 - d.textDrawnX + (d.depth * 10); })
             .attr('y', gApp._rowHeight / 4)  //Should follow point size of font
             .attr('class', 'clickable normalText')
             .attr('editable', 'none')
@@ -902,12 +1454,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
             .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
             .on('click', function (d) {
-                //Browsers get confused over the shift key (think it's 'selectAll')
-                // if (d3.event.altKey) {
-                // gApp._dataPanel(d, idx, arr);
-                // } else 
                 if (!d3.event.altKey && d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
-                    gApp._setTimeline(d);
+                    gApp._setViewportToPi(d);
                 }
             })
             .text(function (d) {
@@ -923,8 +1471,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
 
         // Expand / Collapse arrows
-        gApp.expandables = d3.selectAll('.children').append('text')
-            .attr('x', function (d) { return -(symbolWidth + d.plannedDrawnX) + (d.depth * 10); })
+        gApp.expandables = d3.selectAll('.childrenText').append('text')
+            .attr('x', function (d) { return -(symbolWidth + d.textDrawnX) + (d.depth * 10); })
             .attr('y', gApp._rowHeight / 4)
             .attr('class', function (d) { return 'icon-gear app-menu collapse-icon ' + (d.children ? 'collapse-arrow' : 'expand-arrow'); })
             .attr('alignment-baseline', 'central')
@@ -1114,9 +1662,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (event.altKey) {
             gApp._nodePopup(node, index, array);
         }
-        // else {
-        // gApp._dataPanel(node, index, array);
-        // }
     },
 
     _nodes: [],
@@ -1165,7 +1710,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         // We want to redraw the tree on the second handler
         // once both radio buttons have finished updating values
         if (newValue) { return; }
-        gApp._zoomedStart();
+        gApp._redrawTree();
     },
 
     _updateFilterTabText: function () {
@@ -1299,668 +1844,61 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _addSharedViewsCombo: function () {
-        gApp.down('#piControlsContainer').add([
-            {
-                xtype: 'rallysharedviewcombobox',
-                title: 'Shared Views',
-                itemId: 'timelineSharedViewCombobox',
-                enableUrlSharing: true,
-                context: gApp.getContext(),
-                cmp: gApp,
-                listeners: {
-                    ready: function (combo) {
-                        combo.setValue(null);
-                    }
-                }
-                // defaultViews: [{
-                //     Name: 'Default View',
-                //     identifier: 1,
-                //     Value: {
-                //     }
-                // }]
-            },
-            {
-                xtype: 'rallybutton',
-                text: 'Reset View',
-                itemId: 'resetViewBtn',
-                handler: gApp._resetView
-            }
-        ]);
-    },
-
-    _refreshTimeline: async function () {
-        // TODO: this is kind of a hack for dealing with multiple 'select' listeners
-        // You should fix this later
-        if (gApp.loadingTimeline || gApp.settingView || !gApp.ready) { return; }
-
-        gApp._removeSVGTree();
-        gApp._clearNodes();
-
-        // Reset height so the loading mask shows properly
-        var rs = gApp.down('#rootSurface');
-        rs.getEl().setHeight(300);
-
-        gApp.setLoading('Loading portfolio items...');
-        gApp.loadingTimeline = true;
-
-        await gApp._getDefaultProjectID();
-
-        if (!gApp.releases) {
-            await gApp._getReleases();
-        }
-
-        if (!gApp.iterations) {
-            await gApp._getIterations();
-        }
-
-        if (!gApp.milestones) {
-            await gApp._getMilestones();
-        }
-
-        return new Promise(function (resolve, reject) {
-            if (gApp._isAncestorSelected()) {
-
-                // Ancestor plugin gives us the ref and typepath, so we need to fetch
-                // the actual record before proceeding
-                var piData = gApp.ancestorFilterPlugin._getValue();
-                gApp._fetchRecordByRef(piData, function (store, records, success) {
-                    if (success) {
-                        if (records && records.length) {
-                            records[0].id = 'root';
-                            gApp.expandData[0].expanded = true;
-                            gApp._getArtifactsFromRoot(records, resolve, reject);
+        return new Promise(function (resolve) {
+            gApp.down('#piControlsContainer').add([
+                {
+                    xtype: 'rallysharedviewcombobox',
+                    title: 'Shared Views',
+                    itemId: 'timelineSharedViewCombobox',
+                    enableUrlSharing: true,
+                    context: gApp.getContext(),
+                    cmp: gApp,
+                    listeners: {
+                        ready: function (combo) {
+                            combo.setValue(null);
+                            resolve();
                         }
-                        else { reject('Failed to retrieve selected portfolio item. Please reload and try again.'); }
                     }
-                    else { reject('Failed to retrieve selected portfolio item. Please reload and try again.'); }
-                });
-            }
-            // No ancestor selected, load all PIs starting at selected type
-            else {
-                var topType = gApp._getTopLevelType();
-                if (topType) {
-                    gApp.expandData[0].expanded = false;
-                    gApp._getArtifacts(topType, resolve, reject);
+                    // defaultViews: [{
+                    //     Name: 'Default View',
+                    //     identifier: 1,
+                    //     Value: {
+                    //     }
+                    // }]
+                },
+                {
+                    xtype: 'rallybutton',
+                    text: 'Reset View',
+                    itemId: 'resetViewBtn',
+                    handler: gApp._resetView
                 }
-                else {
-                    // reject("Failed while fetching portfolio items. Couldn't load ancestor type."); 
-                    resolve();
-                }
-            }
-        }).then(
-            // RESOLVE
-            function () {
-                gApp._removeChildlessNodes();
-                gApp._redrawNodeTree();
-                if (!gApp._isAncestorSelected()) { gApp._collapseAll(); }
-            },
-            // REJECT
-            function (error) {
-                console.log(error);
-                gApp._showError(gApp._parseError(error, 'Failed while fetching portfolio items. Please reload and try again.'));
-            }
-        ).finally(function () {
-            gApp.setLoading(false);
-            gApp.loadingTimeline = false;
+            ]);
         });
     },
 
-    _kickOff: async function () {
-        // variable to bind to the expand/collapse all button on timeline
-        gApp.expandData = [{ expanded: true }];
+    // Iterate through the nodes and find the earliest planned or actual start date and
+    // latest planned or actual end date in order to set the range for the timeline
+    _findDateRange: function () {
+        let maxDate = new Date('01/01/1980');
+        let minDate = new Date('12/01/2080');
 
-        gApp._typeStore = gApp.ancestorFilterPlugin.portfolioItemTypes;
-
-        var childTypes = gApp._getTypeList(gApp._highestOrdinal() - 1);
-        var childModels = [];
-        _.each(childTypes, function (model) { childModels.push(model.Type); });
-
-        var fontStyle = 'font-size: 13px; font-family:ProximaNova,Helvetica,Arial';
-
-        gApp.tabPanel.child('#chartControlsTab').add(
-            {
-                xtype: 'container',
-                layout: {
-                    type: 'hbox',
-                    align: 'middle',
-                    defaultMargins: '8 15 5 0'
-                },
-                items: [
-                    {
-                        xtype: 'panel',
-                        title: 'Axis Dates',
-                        titleAlign: 'center',
-                        titleCollapse: true,
-                        collapsible: true,
-                        collapsed: true,
-                        border: false,
-                        width: 180,
-                        layout: {
-                            type: 'vbox'
-                        },
-                        items: [
-                            {
-                                xtype: 'rallydatefield',
-                                fieldLabel: 'Start',
-                                labelSeparator: '',
-                                value: new Date(),
-                                itemId: 'axisStartDate',
-                                labelStyle: fontStyle + '; margin-right: 0;',
-                                labelWidth: 40,
-                                margin: 5,
-                                validateOnChange: true,
-                                listeners: { aftervalidate: gApp._onAxisDateChange }
-                            },
-                            {
-                                xtype: 'rallydatefield',
-                                fieldLabel: 'End',
-                                labelSeparator: '',
-                                value: new Date(),
-                                itemId: 'axisEndDate',
-                                labelStyle: fontStyle + '; margin-right: 0;',
-                                labelWidth: 40,
-                                margin: 5,
-                                validateOnChange: true,
-                                listeners: { aftervalidate: gApp._onAxisDateChange }
-                            }
-                        ]
-                    },
-                    {
-                        xtype: 'container',
-                        id: 'zoomArea',
-                        layout: {
-                            type: 'hbox',
-                            align: 'middle'
-                        },
-                        items: [
-                            {
-                                xtype: 'text',
-                                text: 'ZOOM',
-                                style: fontStyle,
-                                width: 50,
-                                margin: '0 5 0 0',
-                                itemId: 'zoomLabel'
-                            },
-                            {
-                                xtype: 'rallybutton',
-                                itemId: 'zoomOutBtn',
-                                id: 'zoomOutBtn',
-                                margin: '0 10 0 0',
-                                iconCls: 'icon-collapse',
-                                handler: function () { gApp._zoom(false); }
-                            },
-                            {
-                                xtype: 'rallybutton',
-                                itemId: 'zoomInBtn',
-                                id: 'zoomInBtn',
-                                iconCls: 'icon-expand',
-                                margin: 0,
-                                handler: function () { gApp._zoom(true); }
-                            }
-                        ]
-                    },
-                    {
-                        xtype: 'rallybutton',
-                        text: 'RESET AXIS',
-                        style: fontStyle,
-                        margin: 0,
-                        itemId: 'resetViewBtn',
-                        handler: gApp._startTreeAgain
-                    },
-                    {
-                        xtype: 'panel',
-                        title: 'AXIS LABELS',
-                        titleAlign: 'center',
-                        titleCollapse: true,
-                        collapsible: true,
-                        collapsed: true,
-                        border: false,
-                        width: 115,
-                        layout: {
-                            type: 'hbox'
-                        },
-                        items: [
-                            {
-                                xtype: 'fieldcontainer',
-                                layout: {
-                                    type: 'vbox'
-                                },
-                                labelStyle: fontStyle,
-                                labelSeparator: '',
-                                labelWidth: 0,
-                                width: 95,
-                                margin: 5,
-                                defaultType: 'checkboxfield',
-                                border: 0,
-                                items: [
-                                    {
-                                        boxLabel: 'Dates',
-                                        itemId: 'dateAxisCheckbox',
-                                        name: 'overlayCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('calendarOverlay'),
-                                        handler: gApp._setAxis
-                                    },
-                                    {
-                                        boxLabel: 'Iterations',
-                                        itemId: 'iterationsCheckbox',
-                                        name: 'overlayCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('iterationOverlay'),
-                                        handler: gApp._rescaledStart
-                                    },
-                                    {
-                                        boxLabel: 'Releases',
-                                        itemId: 'releasesCheckbox',
-                                        name: 'overlayCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('releaseOverlay'),
-                                        handler: gApp._rescaledStart
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        xtype: 'panel',
-                        title: 'GRIDLINES',
-                        titleAlign: 'center',
-                        titleCollapse: true,
-                        collapsible: true,
-                        collapsed: true,
-                        border: false,
-                        width: 200,
-                        layout: {
-                            type: 'hbox'
-                        },
-                        items: [
-                            {
-                                xtype: 'fieldcontainer',
-                                layout: {
-                                    type: 'vbox'
-                                },
-                                labelStyle: fontStyle,
-                                labelSeparator: '',
-                                labelWidth: 0,
-                                width: 95,
-                                margin: 5,
-                                defaultType: 'checkboxfield',
-                                border: 0,
-                                items: [
-                                    {
-                                        boxLabel: 'Dates',
-                                        itemId: 'dateGridlineCheckbox',
-                                        name: 'gridlineCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('calendarGridlines'),
-                                        handler: gApp._setAxis
-                                    },
-                                    {
-                                        boxLabel: 'Iterations',
-                                        itemId: 'iterationGridlineCheckbox',
-                                        name: 'gridlineCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('iterationGridlines'),
-                                        handler: gApp._setAxis
-                                    },
-                                    {
-                                        boxLabel: 'Releases',
-                                        itemId: 'releaseGridlineCheckbox',
-                                        name: 'gridlineCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('releaseGridlines'),
-                                        handler: gApp._setAxis
-                                    }
-                                ]
-                            },
-                            {
-                                xtype: 'fieldcontainer',
-                                fieldLabel: '',
-                                layout: {
-                                    type: 'vbox'
-                                },
-                                labelStyle: fontStyle,
-                                labelSeparator: '',
-                                labelWidth: 0,
-                                width: 90,
-                                margin: 5,
-                                defaultType: 'checkboxfield',
-                                border: 0,
-                                items: [
-                                    {
-                                        boxLabel: 'Milestones',
-                                        itemId: 'milestoneGridlineCheckbox',
-                                        name: 'gridlineCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('milestoneGridlines'),
-                                        handler: gApp._setAxis
-                                    },
-                                    {
-                                        boxLabel: 'Dependencies',
-                                        itemId: 'showDependenciesCheckbox',
-                                        name: 'gridlineCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('dependencyStrings'),
-                                        handler: gApp._setAxis
-                                    },
-                                    {
-                                        boxLabel: 'Today',
-                                        itemId: 'todayGridlineCheckbox',
-                                        name: 'gridlineCheckboxes',
-                                        inputValue: true,
-                                        checked: gApp.getSetting('todayGridline'),
-                                        handler: gApp._setAxis
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        xtype: 'panel',
-                        title: 'ROW LABELS',
-                        titleAlign: 'center',
-                        titleCollapse: true,
-                        collapsible: true,
-                        collapsed: true,
-                        border: false,
-                        width: 120,
-                        items: [{
-                            xtype: 'fieldcontainer',
-                            itemId: 'piLabelGroup',
-                            layout: {
-                                type: 'vbox'
-                            },
-                            labelStyle: fontStyle,
-                            labelSeparator: '',
-                            labelWidth: 0,
-                            width: 110,
-                            margin: 5,
-                            defaultType: 'radiofield',
-                            border: 0,
-                            items: [
-                                {
-                                    boxLabel: 'ID + Name',
-                                    itemId: 'showLabelsCheckbox',
-                                    name: 'piLabelField',
-                                    inputValue: true,
-                                    checked: true,
-                                    handler: gApp._onRowLabelChange
-                                },
-                                {
-                                    boxLabel: 'ID + Short Name',
-                                    itemId: 'shortenLabelsCheckbox',
-                                    name: 'piLabelField',
-                                    inputValue: true,
-                                    checked: false,
-                                    handler: gApp._onRowLabelChange
-                                },
-                                {
-                                    boxLabel: 'ID only',
-                                    itemId: 'idOnlyCheckbox',
-                                    name: 'piLabelField',
-                                    inputValue: true,
-                                    checked: false,
-                                    handler: gApp._onRowLabelChange
-                                }
-                            ]
-                        }]
-                    },
-                    {
-                        xtype: 'panel',
-                        title: '% DONE',
-                        titleAlign: 'center',
-                        titleCollapse: true,
-                        collapsible: true,
-                        collapsed: true,
-                        border: false,
-                        width: 120,
-                        items: [{
-                            xtype: 'fieldcontainer',
-                            itemId: 'percentDoneGroup',
-                            layout: {
-                                type: 'vbox'
-                            },
-                            labelStyle: fontStyle,
-                            labelSeparator: '',
-                            labelWidth: 0,
-                            width: 110,
-                            margin: 5,
-                            defaultType: 'radiofield',
-                            border: 0,
-                            items: [
-                                {
-                                    boxLabel: 'By Plan Est.',
-                                    itemId: 'doneByEstimateCheckbox',
-                                    name: 'percentDoneField',
-                                    inputValue: true,
-                                    checked: true,
-                                    handler: gApp._rescaledStart
-                                },
-                                {
-                                    boxLabel: 'By Story Count',
-                                    itemId: 'doneByCountCheckbox',
-                                    name: 'percentDoneField',
-                                    inputValue: true,
-                                    checked: false
-                                },
-                            ]
-                        }]
-                    },
-                    {
-                        xtype: 'text',
-                        text: 'EXPORT',
-                        style: fontStyle,
-                        width: 50,
-                        margin: 0,
-                        itemId: 'exportLabel'
-                    },
-                    {
-                        xtype: 'rallybutton',
-                        iconCls: 'icon-export',
-                        height: 22,
-                        toolTipText: 'Export Timeline...',
-                        handler: gApp._exportTimeline
-                    }
-                ]
-            });
-
-        // Add the PI Type dropdown
-        await gApp._updatePiTypeList();
-
-        gApp._addSharedViewsCombo();
-
-        gApp.ready = true;
-        gApp._updateFilterTabText();
-        gApp._updateAncestorTabText();
-        gApp._refreshTimeline();
-    },
-
-    _buildConfig: function (type, parentRecords) {
-        var dataContext = gApp.getContext().getDataContext();
-        var typePath = type.get('TypePath');
-        var filters = gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath);
-        var scopeAllProjects = gApp.down('#scopeCombobox').getValue();
-        var topLevelTypePath = gApp.down('#piTypeCombobox').getValue();
-
-        // If scoping is set to all projects and we're retrieving the top level PIs
-        // we  limit the results for performance reasons
-        var pagesize = 800;
-        if (scopeAllProjects && typePath === topLevelTypePath) {
-            let ord = gApp._getOrdFromTypePath(typePath);
-            if (ord) {
-                if (ord === 1) {
-                    pagesize = 200;
-                }
-                else if (ord === 2) {
-                    pagesize = 100;
-                }
-                else {
-                    pagesize = 30;
-                }
+        _.each(gApp._nodes, function (node) {
+            if (node.record.get('PlannedStartDate') && node.record.get('PlannedStartDate') < minDate) {
+                minDate = node.record.get('PlannedStartDate');
             }
-        }
-
-        var config = {
-            model: typePath,
-            sorters: [{
-                property: 'DragAndDropRank',
-                direction: 'ASC'
-            }],
-            pageSize: pagesize,
-            limit: pagesize,
-            fetch: gApp.STORE_FETCH_FIELD_LIST,
-            filters: []
-        };
-        if (gApp.getSetting('hideArchived')) {
-            config.filters.push({
-                property: 'Archived',
-                operator: '=',
-                value: false
-            });
-        }
-
-        if (filters && filters.length) {
-            config.filters = config.filters.concat(filters);
-        }
-
-        if (!scopeAllProjects && typePath === topLevelTypePath) {
-            // Keep project scoping
-        }
-        else {
-            dataContext.project = null;
-        }
-
-        // Parents have been filtered so we only want children underneath those
-        // parents that were returned to avoid breaking the tree
-        if (parentRecords) {
-            config.enablePostGet = true;
-
-            var parentIds = [];
-
-            _.each(parentRecords, function (parent) {
-                parentIds.push(parent.get('ObjectID'));
-            });
-
-            var parentFilter = new Rally.data.wsapi.Filter({
-                property: 'Parent.ObjectID',
-                operator: 'in',
-                value: parentIds
-            });
-            parentFilter.toString = function () { return '(Parent.ObjectID in ,' + parentIds.join(',') + ')'; };
-            config.filters.push(parentFilter);
-        }
-        // else {
-        //     if (gApp._isAncestorSelected()) {
-        //         config.filters.push(gApp.ancestorFilterPlugin.getAncestorFilterForType(typePath));
-        //     }
-        // }
-
-        config.context = dataContext;
-
-        return Ext.clone(config);
-    },
-
-    _getArtifactsFromRoot: function (records, resolve, reject) {
-        if (records.length) {
-            gApp._nodes = gApp._nodes.concat(gApp._createNodes(records));
-            gApp.setLoading(`Loading portfolio items... (${gApp._nodes.length} fetched so far)`);
-            var childType = gApp._findChildType(records[0]);
-
-            if (childType) {
-                try {
-                    let promises = [];
-                    let maxResults = 5;
-                    while (records.length) {
-                        let chunk = records.splice(0, maxResults);
-                        let config = gApp._buildConfig(childType, chunk);
-                        promises.push(new Promise(function (newResolve, newReject) {
-                            Ext.create('Rally.data.wsapi.Store', config).load()
-                                .then({
-                                    success: function (results) {
-                                        gApp._getArtifactsFromRoot(results, newResolve, newReject);
-                                    },
-                                    failure: function (error) { newReject(error); },
-                                    scope: this
-                                });
-                            // gApp._getArtifactsFromRoot(chunk, newResolve, newReject);
-                        }));
-                    }
-                    Promise.all(promises).then(resolve, function (e) { reject(e); });
-                }
-                catch (e) { reject(e); }
+            if (node.record.get('ActualStartDate') && node.record.get('ActualStartDate') < minDate) {
+                minDate = node.record.get('ActualStartDate');
             }
-            else { resolve(); }
-        }
-        else { resolve(); }
-    },
+            if (node.record.get('PlannedEndDate') && node.record.get('PlannedEndDate') > maxDate) {
+                maxDate = node.record.get('PlannedEndDate');
+            }
+            if (node.record.get('ActualEndDate') && node.record.get('ActualEndDate') > maxDate) {
+                maxDate = node.record.get('ActualEndDate');
+            }
+        });
 
-    _getArtifacts: function (topType, resolve, reject) {
-        var config = gApp._buildConfig(topType);
-        try {
-            Ext.create('Rally.data.wsapi.Store', config).load()
-                .then({
-                    success: function (results) {
-                        gApp._nodes = gApp._createNodes([{
-                            id: 'root',
-                            parent: null,
-                            data: {
-                                '_ref': 'root',
-                                Parent: null,
-                                ObjectID: 'root',
-                                FormattedID: 'root',
-                                _type: 'root'
-                            },
-                            get: function (fieldName) {
-                                return this.data[fieldName] || null;
-                            }
-                        }]);
-                        if (!results.length) {
-                            reject(`No Portfolio Items of type ${topType.get('Name')} found within this project (or selected scoping)`);
-                            return;
-                        }
-                        else {
-                            _.forEach(results, function (record) {
-                                record.data.Parent = { '_ref': 'root', ObjectID: 'root' };
-                            });
-
-                            let ord = topType.get('Ordinal');
-
-                            // The higher the top level, the more we want to break up the results due
-                            // to using a recursive function to build the hierarchy
-                            let maxResults = (function (ord) {
-                                switch (ord) {
-                                    case 0:
-                                        return 10000;
-                                    case 1:
-                                        return 10;
-                                    case 2:
-                                        return 4;
-                                    default:
-                                        return 1;
-                                }
-                            })(ord);
-                            if (results.length <= maxResults) {
-                                gApp._getArtifactsFromRoot(results, resolve, reject);
-                            } else {
-                                let promises = [];
-                                while (results.length) {
-                                    promises.push(new Promise(function (newResolve, newReject) {
-                                        if (results.length >= maxResults) {
-                                            gApp._getArtifactsFromRoot(results.splice(0, maxResults), newResolve, newReject);
-                                        } else {
-                                            gApp._getArtifactsFromRoot(results.splice(0, results.length), newResolve, newReject);
-                                        }
-                                    }));
-                                }
-                                Promise.all(promises).then(resolve, function (e) { reject(e); });
-                            }
-                        }
-                    },
-                    failure: function (error) { reject(error); },
-                    scope: this
-                });
-        }
-        catch (e) { reject(e); }
+        gApp.tlStart = minDate.getFullYear() === 2080 ? Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack) : minDate;
+        gApp.tlEnd = maxDate.getFullYear() === 1980 ? Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter) : maxDate;
     },
 
     // Since we're filtering on a specific PI type, we want to scan through all types above the
@@ -1977,16 +1915,16 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             let currentType = gApp._findTypeByOrdinal(currentOrd);
 
             if (currentType) {
-                _.each(gApp._nodes, function (currentNode) {
-                    if (!gApp._recordIsRoot(currentNode) && currentNode.record.get('PortfolioItemType').Ordinal === currentOrd) {
-                        for (let isChildNode of gApp._nodes) {
+                _.each(gApp._nodes, function (node) {
+                    if (!gApp._recordIsRoot(node) && node.record.get('PortfolioItemType').Ordinal === currentOrd) {
+                        for (let isChild of gApp._nodes) {
                             // If we find a child node of current node, don't delete current node
-                            if (!gApp._recordIsRoot(currentNode) && !isChildNode.toDelete && isChildNode.record.get('Parent') && isChildNode.record.get('Parent').ObjectID === currentNode.record.get('ObjectID')) {
+                            if (!gApp._recordIsRoot(node) && !isChild.toDelete && isChild.record.get('Parent') && isChild.record.get('Parent').ObjectID === node.record.get('ObjectID')) {
                                 toDelete = false;
                                 break;
                             }
                         }
-                        currentNode.toDelete = toDelete;
+                        node.toDelete = toDelete;
                         toDelete = true;
                     }
                 });
@@ -1994,8 +1932,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             currentOrd++;
         }
 
-        gApp._nodes = _.filter(gApp._nodes, function (currentNode) {
-            return !currentNode.toDelete;
+        gApp._nodes = _.filter(gApp._nodes, function (node) {
+            return !node.toDelete;
         });
     },
 
@@ -2310,8 +2248,16 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return ord;
     },
 
-    _shouldShowRoot() {
+    _shouldShowRoot: function () {
         return gApp._isAncestorSelected();
+    },
+
+    _showReleaseHeader: function () {
+        return gApp.down('#releasesCheckbox').getValue();
+    },
+
+    _showIterationHeader: function () {
+        return gApp.down('#iterationsCheckbox').getValue();
     },
 
     _getNodeTreeId: function (d) {
@@ -2359,10 +2305,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return retval;
     },
 
-    _addSVGTree: function () {
+    _initializeSVG: function () {
         var svg = d3.select('#rootSurface');
         svg.append("g")
-            .attr("transform", "translate(" + gApp._rowHeight + "," + (gApp._rowHeight + (gApp.down('#releasesCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0) + (gApp.down('#iterationsCheckbox').getValue() ? gApp._rowHeight / 1.5 : 0)) + ")")
+            .attr("transform", "translate(" + gApp._rowHeight + "," + (gApp._rowHeight + (gApp._showReleaseHeader() ? gApp._rowHeight / 1.5 : 0) + (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0)) + ")")
             .attr("id", "zoomTree")
             .attr('width', +svg.attr('width') - gApp._rowHeight)
             .attr('height', +svg.attr('height'))
@@ -2370,21 +2316,25 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('width', +svg.attr('width') - gApp._rowHeight)
             .attr('height', +svg.attr('height'))
             .attr('class', 'arrowbox')
-            .on('click', gApp._startTreeAgain);
+            .on('click', function () {
+                if (gApp.viewportDays !== gApp.tlBack + gApp.tlAfter) {
+                    gApp._initialiseScale();
+                }
+            });
 
-        svg.append("g")
-            .attr("transform", "translate(0,0)")
-            .attr('width', gApp._rowHeight)
-            .attr("id", "staticTree");
+        // svg.append("g")
+        //     .attr("transform", "translate(0,0)")
+        //     .attr('width', gApp._rowHeight)
+        //     .attr("id", "staticTree");
     },
 
     _removeSVGTree: function () {
         if (d3.select("#zoomTree")) {
             d3.select("#zoomTree").remove();
         }
-        if (d3.select("#staticTree")) {
-            d3.select("#staticTree").remove();
-        }
+        // if (d3.select("#staticTree")) {
+        //     d3.select("#staticTree").remove();
+        // }
         gApp._removeCards();
     },
 
@@ -2559,8 +2509,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             axisEndDate: gApp.down('#axisEndDate').getValue(),
             axisLabels: {
                 dates: gApp.down('#dateAxisCheckbox').getValue(),
-                iterations: gApp.down('#iterationsCheckbox').getValue(),
-                releases: gApp.down('#releasesCheckbox').getValue()
+                iterations: gApp._showIterationHeader(),
+                releases: gApp._showReleaseHeader()
             },
             gridlines: {
                 dates: gApp.down('#dateGridlineCheckbox').getValue(),
@@ -2635,263 +2585,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
 
         gApp.down(`#${id}`).setValue(true);
-    },
-
-    _addAncestorPlugin: function () {
-        // Button to apply filters
-        gApp.down('#chartFiltersTab').add([
-
-            {
-                xtype: 'container',
-                itemId: 'chartFilterButtonArea',
-                margin: 5,
-                layout: {
-                    type: 'hbox',
-                    align: 'middle',
-                    defaultMargins: '0 15 15 0'
-                },
-                items: [
-                    {
-                        xtype: 'rallybutton',
-                        itemId: 'applyFiltersBtn',
-                        handler: gApp._applyFilters,
-                        text: 'Apply filters to timeline',
-                        cls: 'apply-filters-button',
-                        disabled: true
-                    }
-                ]
-            },
-            {
-                xtype: 'container',
-                itemId: 'chartFilterPanelArea',
-                margin: 5,
-                layout: {
-                    type: 'hbox'
-                }
-            }
-        ]);
-
-        gApp.ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
-            ptype: 'UtilsAncestorPiAppFilter',
-            pluginId: 'ancestorFilterPlugin',
-            panelRenderAreaId: 'chartFilterPanelArea',
-            btnRenderAreaId: 'chartFilterButtonArea',
-            filtersHidden: false,
-            allowNoEntry: false,
-            labelStyle: 'font-size: 14px',
-            ownerLabel: '',
-            ownerLabelWidth: 0,
-            settingsConfig: {
-                labelWidth: 150,
-                padding: 10
-            },
-            listeners: {
-                scope: gApp,
-                ready: function (plugin) {
-                    plugin.addListener({
-                        scope: gApp,
-                        select: function () {
-                            gApp._onAncestorFilterChange();
-                        },
-                        change: gApp._onFilterChange
-                    });
-                    gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl').hide();
-                    if (gApp.ancestorFilterPlugin._isSubscriber()) {
-                        gApp.down('#applyFiltersBtn').hide();
-                        gApp.down('#chartFiltersTab').hide();
-                    }
-                    gApp.advFilters = plugin.getMultiLevelFilters();
-                    gApp._kickOff();
-                    // gApp._addMultiLevelFilterPlugin();
-                },
-                single: true
-            }
-        });
-        gApp.addPlugin(gApp.ancestorFilterPlugin);
-    },
-
-    _addMultiLevelFilterPlugin: function () {
-        // Button to apply filters
-        gApp.down('#chartFiltersTab').add([
-
-            {
-                xtype: 'container',
-                itemId: 'chartFilterButtonArea',
-                margin: 5,
-                layout: {
-                    type: 'hbox',
-                    align: 'middle',
-                    defaultMargins: '0 15 15 0'
-                },
-                items: [
-                    {
-                        xtype: 'rallybutton',
-                        itemId: 'applyFiltersBtn',
-                        handler: gApp._applyFilters,
-                        text: 'Apply filters to timeline',
-                        cls: 'apply-filters-button',
-                        disabled: true
-                    }
-                ]
-            },
-            {
-                xtype: 'container',
-                itemId: 'chartFilterPanelArea',
-                margin: 5,
-                layout: {
-                    type: 'hbox'
-                }
-            }
-        ]);
-
-        //let filterHelp = document.getElementById('filter-help-icon');
-        // Ext.create('Rally.ui.tooltip.ToolTip', {
-        //     target: 'filter-help-icon',
-        //     html: '<div><p>After setting all of your desired filters, click the green button to apply the filters and refresh the timeline. Clicking the "Clear All" button will automatically remove all filters and refresh the timeline</p><p>When filters are active, the timeline will remove all portfolio items that have no children (excluding the lowest level PI), starting from the lowest filtered portfolio item type and working up the hierarchy.</p><p>Example: If you filter by feature owner, then all epics without any features fitting the filter criteria will not show on the timeline.</p></div>',
-        //     itemId: 'filterTip',
-        //     id: 'filterTip',
-        //     showDelay: 200,
-        //     // style: {
-        //     //     'z-index': 1500
-        //     // },
-        //     hideDelay: 500000
-        // });
-
-        gApp.multiLevelFilterPlugin = Ext.create('Utils.MultiLevelPiAppFilter', {
-            ptype: 'UtilsMultiLevelPiAppFilter',
-            pluginId: 'multiLevelFilterPlugin',
-            btnRenderAreaId: 'chartFilterButtonArea',
-            panelRenderAreaId: 'chartFilterPanelArea',
-            filtersHidden: false,
-            listeners: {
-                scope: gApp,
-                ready: function (plugin) {
-                    plugin.addListener({
-                        scope: gApp,
-                        change: gApp._onFilterChange
-                    });
-
-                    gApp.advFilters = plugin.getMultiLevelFilters();
-                    gApp.multiLevelFilterPlugin.showFiltersBtn.hide();
-
-                    gApp._kickOff();
-                },
-                single: true
-            }
-        });
-        gApp.addPlugin(gApp.multiLevelFilterPlugin);
-    },
-
-    launch: function () {
-        gApp.ready = false;
-        gApp.loadingTimeline = false;
-        Rally.data.wsapi.Proxy.superclass.timeout = 240000;
-        Rally.data.wsapi.batch.Proxy.superclass.timeout = 240000;
-
-        gApp.down('#piControlsContainer').add([
-            {
-                xtype: 'container',
-                id: 'piTypeContainer',
-                layout: {
-                    type: 'hbox',
-                    align: 'middle'
-                }
-                // items: [{
-                //     xtype: 'rallyportfolioitemtypecombobox',
-                //     itemId: 'piTypeCombobox',
-                //     stateful: true,
-                //     stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.topLevelPIType'),
-                //     stateEvents: ['select'],
-                //     fieldLabel: 'PI Type',
-                //     labelStyle: 'font-size: 14px',
-                //     labelWidth: 70,
-                //     valueField: 'TypePath',
-                //     allowNoEntry: false,
-                //     defaultSelectionPosition: 'first',
-                //     listeners: {
-                //         scope: gApp,
-                //         change: function () {
-                //             gApp._onTopLevelPIChange();
-                //         }
-                //     },
-                // }]
-            },
-            {
-                xtype: 'rallycombobox',
-                itemId: 'scopeCombobox',
-                stateful: true,
-                stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.projectScopeControl'),
-                stateEvents: ['select'],
-                displayField: 'text',
-                valueField: 'value',
-                fieldLabel: 'Scope ',
-                afterLabelTextTpl: "<span id='scope-help-icon' style='font-size:12px' class='icon-help'> </span>",
-                labelStyle: 'font-size: 14px',
-                labelWidth: 60,
-                storeConfig: {
-                    fields: ['text', 'value'],
-                    data: [{
-                        text: "Current Project(s)",
-                        value: false
-                    }, {
-                        text: "Any Project",
-                        value: true
-                    }]
-                },
-                listeners: {
-                    scope: this,
-                    change: function () {
-                        gApp._onScopeChange();
-                    },
-                    afterrender: function (tooltip) {
-                        Ext.create('Rally.ui.tooltip.ToolTip', {
-                            target: (tooltip.labelEl && tooltip.labelEl.dom.children.length && tooltip.labelEl.dom.children[0]) || tooltip.labelEl,
-                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results will be limited</p></div>',
-                            itemId: 'scopeTip',
-                            id: 'scopeTip',
-                            showDelay: 200
-                        });
-                    }
-                },
-            }
-        ]);
-
-        gApp.tabPanel = gApp.down('#filterBox').add(
-            {
-                xtype: 'tabpanel',
-                cls: 'blue-tabs',
-                activeTab: 0,
-                plain: true,
-                autoRender: true,
-                minTabWidth: 140,
-                items: [
-                    {
-                        title: 'Chart Controls',
-                        html: '',
-                        itemId: 'chartControlsTab'
-                    },
-                    {
-                        title: 'Filters',
-                        html: '',
-                        itemId: 'chartFiltersTab',
-                        padding: 0
-                        // tabConfig: {
-                        //     tooltip: '<div><p>After setting all of your desired filters, click the green button to apply the filters and refresh the timeline. Clicking the "Clear All" button will automatically remove all filters and refresh the timeline</p><p>When filters are active, the timeline will remove all portfolio items that have no children (excluding the lowest level PI), starting from the lowest filtered portfolio item type and working up the hierarchy.</p><p>Example: If you filter by feature owner, then all epics without any features fitting the filter criteria will not show on the timeline.</p></div>'
-                        // },
-                        // iconCls: 'icon-help'
-                    },
-                    {
-                        title: 'Ancestor Chooser',
-                        html: '',
-                        itemId: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
-                        padding: 10,
-                        height: 65,
-                        width: '95%'
-                    }
-                ]
-            });
-
-        gApp._addAncestorPlugin();
     },
 
     initComponent: function () {
