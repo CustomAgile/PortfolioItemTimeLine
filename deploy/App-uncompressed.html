@@ -3,8 +3,8 @@
 <head>
     <title>Enhanced Portfolio Item Timeline</title>
     <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
-    <!--  Build Date: Fri Aug 02 2019 16:24:36 GMT-0400 (Eastern Daylight Time) -->
-    <!--  Version: "0.2.2"-->
+    <!--  Build Date: Fri Aug 02 2019 16:48:59 GMT-0400 (Eastern Daylight Time) -->
+    <!--  Version: "0.3.0"-->
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
     <script type="text/javascript">
@@ -1616,8 +1616,6 @@
     config: {
         tlAfter: 90,  // Default days past today for viewport end
         tlBack: 120, // Default days before today for viewport start
-        // viewportStart: Ext.Date.subtract(new Date(), Ext.Date.DAY, 120),
-        // viewportEnd: Ext.Date.add(new Date(), Ext.Date.DAY, 90),
         viewportDays: 210,
         zoomFactor: 0.35, // Multiplier for calculating how much to zoom in and out
         maxZoom: 60, // Number of days to display across viewport before disabling zooming in
@@ -2506,7 +2504,6 @@
 
         gApp.viewportDays = gApp._daysBetween(end, start) + piPadding * 2;
         gApp.currentScrollX = gApp._getViewportScaler() * viewportStartInDays;
-        // gApp.previousTimelineWidth = document.getElementById('timelineContainer').scrollWidth;
         gApp._redrawTree();
     },
 
@@ -2552,8 +2549,6 @@
         let clearFilters = gApp.ancestorFilterPlugin.getMultiLevelFilterStates();
 
         gApp.viewportDays = gApp.tlBack + gApp.tlAfter;
-        // gApp.viewportStart = Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack);
-        // gApp.viewportEnd = Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter);
 
         gApp.setCurrentView({
             piTypeCombobox: gApp._getTopLevelTypePath(),
@@ -21170,7 +21165,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             Rally.launchApp('CustomAgile.apps.PortfolioItemTimeline.app', {
                 name:"Enhanced Portfolio Item Timeline",
                 parentRepos:"",
-                version:"0.2.2"
+                version:"0.3.0"
             });
 
         });
@@ -21548,11 +21543,6 @@ text.collapse-arrow {
 }
 /* #scopeTip .x-tip-body, #scopeTip .x-tip-anchor {
   
-} */
-/* #timelineContainer .x-box-inner {
-  display: flex;
-  flex-wrap: nowrap;
-  overflow: auto;
 } */
 #filter-help-icon {
   /* position: absolute;
