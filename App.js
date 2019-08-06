@@ -140,7 +140,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
     _changedItems: [],
     itemId: 'rallyApp',
-    MIN_COLUMN_WIDTH: 200,        //Looks silly on less than this
+    MIN_COLUMN_WIDTH: 200,
     _rowHeight: 40,
     STORE_FETCH_FIELD_LIST: [
         'Name',
@@ -224,22 +224,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             listeners: { afterrender: function () { gApp = this.up('#rallyApp'); } },
                             visible: false
                         }
-                        // {
-                        //     xtype: 'container',
-                        //     itemId: 'labelSVG',
-                        //     id: 'labelSVG',
-                        //     padding: '10 0 5 0',
-                        //     layout: 'auto',
-                        //     //overflowX: 'scroll',
-                        //     //width: '98%',
-                        //     width: 500,
-                        //     //height: 500,
-                        //     //autoScroll: true,
-                        //     //title: 'Loading...',
-                        //     autoEl: { tag: 'svg' },
-                        //     //listeners: { afterrender: function () { gApp = this.up('#rallyApp'); }, },
-                        //     visible: true
-                        // }
                     ]
                 }
             ]
@@ -356,13 +340,18 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             cmp: gApp
         });
 
-        await gApp._updatePiTypeList();
-        await gApp._addSharedViewsCombo();
-        document.getElementById('timelineContainer').onscroll = gApp._timelineScrolled;
-        gApp._updateFilterTabText();
-        gApp._updateAncestorTabText();
-        gApp.ready = true;
-        gApp._refreshTimeline();
+        setTimeout(async function () {
+            if (gApp.ancestorFilterPlugin._isSubscriber()) {
+                gApp.advFilters = gApp.ancestorFilterPlugin.getMultiLevelFilters();
+            }
+            await gApp._updatePiTypeList();
+            await gApp._addSharedViewsCombo();
+            document.getElementById('timelineContainer').onscroll = gApp._timelineScrolled;
+            gApp._updateFilterTabText();
+            gApp._updateAncestorTabText();
+            gApp.ready = true;
+            gApp._refreshTimeline();
+        }, 400);
     },
 
     _addAncestorPlugin: function () {
@@ -384,6 +373,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         text: 'Apply filters to timeline',
                         cls: 'apply-filters-button',
                         disabled: true
+                    },
+                    {
+                        xtype: 'component',
+                        id: 'subscriberFilterIndicator',
+                        html: '<span class="icon-link icon-large"></span>',
+                        hidden: true
                     }
                 ]
             },
@@ -425,6 +420,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     if (gApp.ancestorFilterPlugin._isSubscriber()) {
                         gApp.down('#applyFiltersBtn').hide();
                         gApp.down('#chartFiltersTab').hide();
+                        gApp.down('#subscriberFilterIndicator').show();
                     }
                     gApp.advFilters = plugin.getMultiLevelFilters();
                     gApp._kickOff();
@@ -726,7 +722,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         startDateField.resumeEvents();
         endDateField.resumeEvents();
 
-        // gApp._setTimeScaler(start, end);
         gApp._redrawTree();
     },
 
@@ -734,7 +729,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.dateScaler = d3.scaleTime()
             .domain([timebegin, timeend])
             .range([0, parseInt(d3.select('#rootSurface').attr('width')) - (gApp._rowHeight + 10)]);
-        //.range([0, gApp.down('#timelineContainer').getWidth() - (gApp._rowHeight + 10)]);
     },
 
     _redrawTree: function () {
@@ -746,33 +740,28 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp._createSVGTree();
         gApp._setAxis();
         gApp.currentScrollX = document.getElementById('timelineContainer').scrollLeft;
-        // gApp.previousTimelineWidth = document.getElementById('timelineContainer').scrollWidth;
         gApp._updateRowLabelLocations();
     },
-
-    // _resetAxis: function () {
-    //     gApp.viewportDays = gApp.tlBack + gApp.tlAfter;
-
-    // },
 
     _setAxis: function () {
         if (gApp.settingView || !gApp._timelineHasItems()) { return; }
 
         gApp._clearSharedViewCombo();
-        // gApp._timelineScrolled({ currentTarget: { scrollLeft: 0 } });
 
         if (gApp.gX) { gApp.gX.remove(); }
 
-        var showCalendarTicks = gApp.down('#dateGridlineCheckbox').getValue();
-        var topPadding = 35;
+        let svg = d3.select('#rootSurface');
+        let width = +svg.attr('width');
+        let height = +svg.attr('height');
+        let viewportWidth = gApp.down('#timelineContainer').getEl().getWidth();
+        let viewportPercentage = width / viewportWidth;
+        let showCalendarTicks = gApp.down('#dateGridlineCheckbox').getValue();
+        let topPadding = 35;
         topPadding += gApp._showReleaseHeader() ? 25 : 0;
         topPadding += gApp._showIterationHeader() ? 26 : 0;
-        var svg = d3.select('#rootSurface');
-        var width = +svg.attr('width');
-        var height = +svg.attr('height');
 
         gApp.xAxis = d3.axisBottom(gApp.dateScaler)
-            .ticks()
+            .ticks(viewportPercentage * 8)
             .tickSize(showCalendarTicks ? height : 0)
             .tickPadding(showCalendarTicks ? 22 - height : 22);
         gApp.gX = svg.append('g');
@@ -831,7 +820,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         `Start Date: ${Rally.util.DateTime.format(d.get('ReleaseStartDate'), 'm-d-y')}`,
                         `End Date: ${Rally.util.DateTime.format(d.get('ReleaseDate'), 'm-d-y')}`
                     ];
-                    let tipId = 'tooltip-release-line'; // ${d.get('Name').replace(/\s/g, '')}
+                    let tipId = 'tooltip-release-line';
 
                     gApp._addHoverTooltip(this, 'release-line-hover', tipId, tipText, 160, 60);
                 })
@@ -981,7 +970,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             return;
         }
 
-        // gApp._setTimeScaler(startDate, endDate);
+        gApp.tlStart = startDate;
+        gApp.tlEnd = endDate;
         gApp._redrawTree();
     },
 
@@ -1003,28 +993,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         // Return if user is scrolling vertically
         if (x === gApp.currentScrollX) { return; }
         gApp.currentScrollX = x;
-        // gApp.previousTimelineWidth = document.getElementById('timelineContainer').scrollWidth;
         gApp.currentScrollPercent = gApp._getHorizontalScrollPercent();
         gApp._updateRowLabelLocations();
     },
 
     _updateRowLabelLocations: function () {
-        // let groups = document.getElementById('rootSurface').getElementsByClassName('timelineRowText');
-        // _.each(groups, function (g) {
-        //     let transformation = window.getComputedStyle(g).getPropertyValue("transform").match(/(-?[0-9\.]+)/g);
-        //     if (transformation && transformation.length >= 6) {
-        //         let transform = 'translate(' + gApp.currentScrollX + ',' + transformation[5] + ')';
-        //         g.setAttribute('transform', transform);
-        //     }
-        // }, this);
-
-        // let labelGroup = document.getElementById('rowLabelGroup');
         d3.select('#rowLabelGroup').attr('transform', `translate(${gApp.currentScrollX},0)`);
-
-        let expandAll = document.getElementById('expandAllText');
-        // let transformation = window.getComputedStyle(expandAll).getPropertyValue("transform").match(/(-?[0-9\.]+)/g);
-        // let transform = 'translate(' + gApp.currentScrollX + ',' + transformation[5] + ')';
-        expandAll.setAttribute('x', gApp.currentScrollX);
+        document.getElementById('expandAllText').setAttribute('x', gApp.currentScrollX);
     },
 
     _zoom: function (zoomIn) {
@@ -1151,7 +1126,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         if (gApp.currentScrollX && gApp.previousTimelineWidth) {
             timelineContainer.setScrollLeft(gApp.currentScrollX + Math.round((timelineWidth - gApp.previousTimelineWidth) / 2));
-            // timelineContainer.setScrollLeft(gApp.currentScrollPercent * timelineContainer.dom.scrollWidth);
         }
         else {
             timelineContainer.setScrollLeft((gApp._daysBetween(new Date(), gApp.tlStart) - gApp._daysBetween(new Date(), Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack))) * viewportScaler);
@@ -1414,7 +1388,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('height', gApp._rowHeight / 2)
             .attr('fill', function (d) { return gApp.colours[d.depth + 1]; })
             .attr('opacity', 0.5)
-            //.attr('opacity', function (d) { return (d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) ? 0.5 : 0.0; })
             .attr('class', 'clickable')
             .on('mouseover', function (d, idx, arr) { gApp._nodeMouseOver(d, idx, arr); })
             .on('mouseout', function (d, idx, arr) { gApp._nodeMouseOut(d, idx, arr); })
@@ -1424,11 +1397,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 }
             });
 
-        // var textRows = rows.append("g").attr('class', function (d) { return 'timelineRowText' + ((d.children || d._children) ? ' childrenText' : ''); })
-        //     .attr('transform', function (d) {
-        //         return d.textTranslate;
-        //     });
-
         // Triple bar symbol (hamburger button)
         labelGroupRows.append('text')
             .attr('y', gApp._rowHeight / 4)
@@ -1437,10 +1405,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .text('V')
             .attr('class', 'icon-gear app-menu')
             .on('click', function (d) { gApp._itemMenu(d); });
-
-        // hamburgers.append('span')
-        //     .attr('class', 'tooltiptext')
-        //     .text(function (d) { return 'Edit ' + d.data.record.get('FormattedID'); });
 
         // PI ID and Name text
         labelGroupRows.append('text')
@@ -1483,7 +1447,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         if (gApp.down('#showDependenciesCheckbox').getValue()) {
             nodetree.each(function (d) {
-                //Now add the dependencies lines
+                // Now add the dependencies lines
                 if (!d.data.record.data.ObjectID) { return; }
                 var deps = d.data.record.get('Successors');
                 if (deps && deps.Count) {
@@ -1495,7 +1459,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                     var e = gApp._findTreeNode(gApp._getNodeTreeRecordId(succ));
                                     var zClass = '';
                                     var zoomTree = d3.select('#zoomTree');
-                                    //Stuff without end point // TODO source.node is sometimes null
+                                    // Stuff without end point // TODO source.node is sometimes null
                                     var source = d3.select('#rect-' + d.data.Name);
                                     var x0 = source.node().getCTM().e + source.node().getBBox().width - gApp._rowHeight;
                                     var y0 = source.node().getCTM().f - gApp._rowHeight / 4;
@@ -1583,9 +1547,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _checkSchedule: function (d, start, end) {
-        if (!d.parent || !d.parent.data.record.data.ObjectID || d.parent.id === 'root') { return false; }  //Top level item doesn't have a parent
+        if (!d.parent || !d.parent.data.record.data.ObjectID || d.parent.id === 'root') {
+            return false;
+        }
+
         var childStart = (start === undefined) ? d.data.record.get('PlannedStartDate') : start;
         var childEnd = (end === undefined) ? d.data.record.get('PlannedEndDate') : end;
+
         return (childEnd > d.parent.data.record.get('PlannedEndDate')) ||
             (childStart < d.parent.data.record.get('PlannedStartDate'));
     },
@@ -1676,10 +1644,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp._refreshTimeline();
     },
 
-    // onSharedViewChange: function (whatami) {
-    //     debugger;
-    // },
-
     onTimeboxScopeChange: function (newTimebox) {
         this.callParent(arguments);
         gApp.timeboxScope = newTimebox;
@@ -1690,9 +1654,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.advFilters = filters;
         gApp._updateFilterTabText();
 
-        // If user clears filters, update timeline, otherwise store the added filter
-        if (gApp._hasFilters()) { gApp.down('#applyFiltersBtn').setDisabled(false); }
-        else { gApp._applyFilters(gApp.down('#applyFiltersBtn')); }
+        // If user clears filters or is a subscriber, update timeline, otherwise store the added filter
+        if (!gApp._hasFilters() || gApp.ancestorFilterPlugin._isSubscriber()) {
+            gApp._applyFilters(gApp.down('#applyFiltersBtn'));
+        }
+        else {
+            gApp.down('#applyFiltersBtn').setDisabled(false);
+        }
 
         gApp._clearSharedViewCombo();
     },
@@ -1767,6 +1735,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
     },
 
+    // When an ancestor is selected, we need to filter out PI types that are
+    // above the selected ancestor since the project scoping wouldn't apply
     _updatePiTypeList: function () {
         let container = gApp.down('#piTypeContainer');
         container.removeAll(true);
@@ -1794,12 +1764,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         };
 
         if (gApp._isAncestorSelected()) {
-            let ancestorOrdinal = gApp._getAncestorTypeOrdinal();
-
             config.filters.push({
                 property: 'Ordinal',
                 operator: '<=',
-                value: ancestorOrdinal
+                value: gApp._getAncestorTypeOrdinal()
             });
         }
 
@@ -1859,12 +1827,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             resolve();
                         }
                     }
-                    // defaultViews: [{
-                    //     Name: 'Default View',
-                    //     identifier: 1,
-                    //     Value: {
-                    //     }
-                    // }]
                 },
                 {
                     xtype: 'rallybutton',
@@ -1879,26 +1841,34 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     // Iterate through the nodes and find the earliest planned or actual start date and
     // latest planned or actual end date in order to set the range for the timeline
     _findDateRange: function () {
-        let maxDate = new Date('01/01/1980');
-        let minDate = new Date('12/01/2080');
+        // These min/max years are used to filter out bad data (I saw a PlannedStartDate of 06/01/0019...)
+        let minYear = 2000;
+        let maxYear = 2200;
+        let maxDate = new Date('01/01/' + minYear);
+        let minDate = new Date('12/01/' + maxYear);
 
         _.each(gApp._nodes, function (node) {
-            if (node.record.get('PlannedStartDate') && node.record.get('PlannedStartDate') < minDate) {
-                minDate = node.record.get('PlannedStartDate');
+            let planStart = node.record.get('PlannedStartDate');
+            let actualStart = node.record.get('ActualStartDate');
+            let planEnd = node.record.get('PlannedEndDate');
+            let actualEnd = node.record.get('ActualEndDate');
+
+            if (planStart && planStart < minDate && planStart.getFullYear() > minYear) {
+                minDate = planStart;
             }
-            if (node.record.get('ActualStartDate') && node.record.get('ActualStartDate') < minDate) {
-                minDate = node.record.get('ActualStartDate');
+            if (actualStart && actualStart < minDate && actualStart.getFullYear() > minYear) {
+                minDate = actualStart;
             }
-            if (node.record.get('PlannedEndDate') && node.record.get('PlannedEndDate') > maxDate) {
-                maxDate = node.record.get('PlannedEndDate');
+            if (planEnd && planEnd > maxDate && planEnd.getFullYear() < maxYear) {
+                maxDate = planEnd;
             }
-            if (node.record.get('ActualEndDate') && node.record.get('ActualEndDate') > maxDate) {
-                maxDate = node.record.get('ActualEndDate');
+            if (actualEnd && actualEnd > maxDate && actualEnd.getFullYear() < maxYear) {
+                maxDate = actualEnd;
             }
         });
 
-        gApp.tlStart = minDate.getFullYear() === 2080 ? Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack) : minDate;
-        gApp.tlEnd = maxDate.getFullYear() === 1980 ? Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter) : maxDate;
+        gApp.tlStart = minDate.getFullYear() === maxYear ? Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack) : minDate;
+        gApp.tlEnd = maxDate <= new Date() ? Ext.Date.add(new Date(), Ext.Date.DAY, gApp.tlAfter) : maxDate;
     },
 
     // Since we're filtering on a specific PI type, we want to scan through all types above the
@@ -1941,6 +1911,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return record.Name === 'root' || record.record.id === 'root';
     },
 
+    // A default project exists as the source of truth for Iterations and Releases
+    // If the user has access to this project, use these timeboxes for the timeline
+    // If the user doesn't have access, traverse up the project hierarchy and use
+    // the top-most project as the timebox source of truth
     _getDefaultProjectID: async function () {
         var defaultProjectID = 167513414724;
         var projectID = gApp.getContext().getProject().ObjectID;
@@ -2184,7 +2158,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _getTopLevelTypePath: function () {
         return gApp.down('#piTypeCombobox').getValue();
-        //return gApp.ancestorFilterPlugin._getValue().piTypePath;
     },
 
     _getTopLevelType: function () {
@@ -2271,7 +2244,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _stratifyNodeTree: function (nodes) {
         return d3.stratify()
             .id(function (d) {
-                var retval = (d.record && gApp._getNodeTreeRecordId(d.record)) || null; //No record is an error in the code, try to barf somewhere if that is the case
+                var retval = (d.record && gApp._getNodeTreeRecordId(d.record)) || null;
                 return retval;
             })
             .parentId(function (d) {
@@ -2283,9 +2256,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _createNodeTree: function (nodes) {
         try {
-            gApp._nodeTree = gApp._stratifyNodeTree(nodes)
-                .sum(function () { return 1; });        // Set the dimensions in svg to match
-            //gApp._nodeTree = nodetree;      //Save for later
+            gApp._nodeTree = gApp._stratifyNodeTree(nodes).sum(function () { return 1; });
             return gApp._nodeTree;
         }
         catch (e) {
@@ -2321,20 +2292,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     gApp._initialiseScale();
                 }
             });
-
-        // svg.append("g")
-        //     .attr("transform", "translate(0,0)")
-        //     .attr('width', gApp._rowHeight)
-        //     .attr("id", "staticTree");
     },
 
     _removeSVGTree: function () {
         if (d3.select("#zoomTree")) {
             d3.select("#zoomTree").remove();
         }
-        // if (d3.select("#staticTree")) {
-        //     d3.select("#staticTree").remove();
-        // }
+
         gApp._removeCards();
     },
 
@@ -2530,7 +2494,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     setCurrentView: async function (view) {
         Ext.suspendLayouts();
         // Using 2 variables to track the upate of the timeline after setting view
-        // and to stop the clearing the view combobox when chart controls are updated
+        // and to stop the clearing of the view combobox when chart controls are updated
         // A sleeker way to accomplish this is out there, but time is short
         gApp.settingView = true;
         gApp.preventViewReset = true;
