@@ -874,15 +874,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     // Called when user clicks on an item in the timeline
     // Sets the timeline view to the planned dates for that item
     _setViewportToPi: function (d) {
-        let piPadding = 2;
+        let piPadding = 1;
         let start = d.data.record.get('PlannedStartDate');
         let end = d.data.record.get('PlannedEndDate');
         let viewportStartInDays = gApp._daysBetween(start, gApp.tlStart);
         viewportStartInDays -= viewportStartInDays > 5 ? piPadding : 0;
 
-        gApp.viewportDays = gApp._daysBetween(end, start) + piPadding * 2;
-        gApp.currentScrollX = gApp._getViewportScaler() * viewportStartInDays;
+        gApp.viewportDays = gApp._daysBetween(end, start) + piPadding * 4;
         gApp._redrawTree();
+        gApp.down('#timelineContainer').getEl().setScrollLeft(gApp._getViewportScaler() * viewportStartInDays);
     },
 
     _addHoverTooltip: function (hoverEl, hoverElClass, tipId, tipText, width, height) {
