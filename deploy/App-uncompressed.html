@@ -3,8 +3,8 @@
 <head>
     <title>Enhanced Portfolio Item Timeline</title>
     <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
-    <!--  Build Date: Tue Aug 06 2019 14:13:52 GMT-0400 (Eastern Daylight Time) -->
-    <!--  Version: "0.3.1"-->
+    <!--  Build Date: Thu Aug 08 2019 10:00:06 GMT-0500 (Central Daylight Time) -->
+    <!--  Version: "0.3.2"-->
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
     <script type="text/javascript">
@@ -14,7 +14,7 @@
      * This override fixes a bug in the SharedViewComboBox which prevents a newly created
      * view from appearing in the view picker until after an app reload
      */
-    _isViewPreference: function(record) {
+    _isViewPreference: function (record) {
         return record.self.typePath === 'preference' &&
             record.get('Type') === 'View' &&
             // This is fix. Must use '==' not '===' for this to return true
@@ -25,7 +25,7 @@
      * This override allows the `enableUrlSharing` option to work.
      * Must override `window.location` with `parent.location`.
      */
-    getSharedViewParam: function() {
+    getSharedViewParam: function () {
         var hash = parent.location.hash,
             matches = hash.match(/sharedViewId=(\d+)/);
 
@@ -43,28 +43,28 @@
      * that handler can act on the store.model.load() promise when it resolves. This allows both loads to proceed in parallel without
      * possibly missing the load event.
      */
-    _ensureLatestView: function(state) {
+    _ensureLatestView: function (state) {
         if (state.objectId && state.versionId) {
             var modelLoadDeferred = Ext.create('Deft.Deferred');
             this.store.model.load(state.objectId, {
                 fetch: ['VersionId', 'Value'],
-                success: function(record) {
+                success: function (record) {
                     modelLoadDeferred.resolve(record);
                 }
             });
-            this.store.on('load', function() {
+            this.store.on('load', function () {
                 modelLoadDeferred.promise.then({
-                    success: function(record) {
+                    success: function (record) {
                         if (record && record.get('VersionId') !== state.versionId) {
                             this._applyView(this._decodeValue(record));
                         }
                     },
                     scope: this
-                })
+                });
             }, this, { single: true });
         }
     },
-})
+});
 
                 Ext.define('Utils.AncestorPiAppFilter', {
     alias: 'plugin.UtilsAncestorPiAppFilter',
@@ -1360,7 +1360,7 @@
                 style: this.fontStyle,
                 margin: 0,
                 itemId: 'resetViewBtn',
-                handler: this.cmp._initialiseScale
+                handler: this.cmp._resetAxis
             },
             {
                 xtype: 'panel',
@@ -2216,7 +2216,7 @@
         if (records.length) {
             gApp._nodes = gApp._nodes.concat(gApp._createNodes(records));
             gApp.setLoading(`Loading portfolio items... (${gApp._nodes.length} fetched so far)`);
-            var childType = gApp._findChildType(records[0]);
+            let childType = gApp._findChildType(records[0]);
 
             if (childType) {
                 try {
@@ -2362,7 +2362,7 @@
         if (gApp.settingView || !gApp._timelineHasItems()) { return; }
 
         gApp._clearSharedViewCombo();
-        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
+        gApp._setZoomButtons();
         gApp._removeSVGTree();
         gApp._createSVGTree();
         gApp._setAxis();
@@ -2392,6 +2392,12 @@
             .tickSize(showCalendarTicks ? height : 0)
             .tickPadding(showCalendarTicks ? 22 - height : 22);
         gApp.gX = svg.append('g');
+
+        gApp.gX.append('rect')
+            .attr('width', width - (gApp._rowHeight + 10))
+            .attr('height', gApp._rowHeight + (gApp._showIterationHeader() && gApp._showReleaseHeader() ? gApp._rowHeight : 0))
+            .attr('fill', 'white');
+
         gApp.gX.attr('transform', 'translate(' + gApp._rowHeight + ',0)')
             .attr('id', 'axisBox')
             .attr('width', width - (gApp._rowHeight + 10))
@@ -2496,6 +2502,78 @@
                     d3.select('#todayLineTooltip').remove();
                 });
         }
+
+        if (gApp._showReleaseHeader()) {
+            var releases = gApp.gX.selectAll(".releaseNode")
+                .data(gApp.releases)
+                .enter().append("g")
+                .attr('class', 'releaseNode')
+                .attr('id', function (d) { return 'release-' + d.get('Name'); })
+                .attr('transform', function (d) {
+                    gApp._initReleaseTranslate(d);
+                    return d.translate;
+                });
+
+            // Release bars
+            releases.append('rect')
+                .attr('width', function (d) { return d.drawnWidth; })
+                .attr('height', gApp._rowHeight / 2)
+                .attr('fill', '#f2f2f2')
+                .attr('stroke', '#808080')
+                .attr('stroke-opacity', 0.5);
+
+            // Release Name
+            releases.append('text')
+                .attr('x', function (d) { return d.drawnWidth / 2; })
+                .attr('y', gApp._rowHeight / 4 + 3)
+                .text(function (d) { return d.get('Name'); })
+                .attr('fill', 'black');
+        }
+
+        if (gApp._showIterationHeader()) {
+            var iterations = gApp.gX.selectAll('.iterationNode')
+                .data(gApp.iterations)
+                .enter().append('g')
+                .attr('class', 'iterationNode')
+                .attr('id', function (d) { return 'iteration-' + d.get('Name'); })
+                .attr('transform', function (d) {
+                    gApp._initIterationTranslate(d);
+                    return d.translate;
+                });
+
+            // Iteration bars
+            iterations.append('rect')
+                .attr('width', function (d) { return d.drawnWidth; })
+                .attr('height', gApp._rowHeight / 2)
+                .attr('fill', '#f2f2f2')
+                .attr('stroke', '#808080')
+                .attr('stroke-opacity', 0.5);
+
+            // Iteration Name
+            iterations.append('text')
+                .attr('x', function (d) { return d.drawnWidth / 2; })
+                .attr('y', gApp._rowHeight / 4 + 3)
+                .text(function (d) { return d.get('Name'); })
+                .attr('fill', 'black');
+        }
+
+        // Expand / Collapse all
+        gApp.gX.selectAll('.expandAll')
+            .data(gApp.expandData)
+            .enter().append('g')
+            .append('text')
+            .attr('id', 'expandAllText')
+            .attr('x', 0)
+            .attr('y', 25)
+            .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
+            .attr('alignment-baseline', 'central')
+            .text(function (d) { return d.expanded ? '9' : '7'; })
+            .on('click', function (d) {
+                d.expanded = !d.expanded;
+                if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
+            });
+
+        gApp._timelineScrolled({ currentTarget: { scrollLeft: gApp.currentScrollX, scrollTop: document.getElementById('timelineContainer').scrollTop } });
     },
 
     // Called when user clicks on an item in the timeline
@@ -2514,10 +2592,10 @@
 
     _addHoverTooltip: function (hoverEl, hoverElClass, tipId, tipText, width, height) {
         let coords = d3.mouse(hoverEl);
-        let tooltip = d3.select('#rootSurface').append('g')
+        let tooltip = d3.select('#axisBox').append('g')
             .attr('id', tipId)
             .attr('class', 'timeline-tooltip')
-            .attr('transform', `translate(${coords[0] + 55},${coords[1]})`);
+            .attr('transform', `translate(${coords[0] + 20},${coords[1]})`);
 
         tooltip.append('rect')
             .attr('width', width)
@@ -2526,13 +2604,12 @@
             .attr('ry', 7);
 
         let textObj = tooltip.append('text')
-            .attr('x', 5)
-            .attr('y', 2)
+            .attr('y', 3)
             .text('');
 
         _.each(tipText, function (newLine) {
             textObj.append('tspan')
-                .attr('x', 7)
+                .attr('x', width / 2)
                 .attr('dy', '1.3em')
                 .text(newLine);
         });
@@ -2544,6 +2621,11 @@
         if (!gApp.preventViewReset) {
             gApp.down('#timelineSharedViewCombobox').setValue(null);
         }
+    },
+
+    _resetAxis: function () {
+        gApp._findDateRange();
+        gApp._initialiseScale();
     },
 
     _resetView: function () {
@@ -2585,7 +2667,9 @@
         });
     },
 
-    _onAxisDateChange: function () {
+    _onAxisDateChange: function (dateField, isValid) {
+        if (!isValid) { return; }
+
         var axisStart = gApp.down('#axisStartDate');
         var startDate = axisStart.getValue();
 
@@ -2616,12 +2700,16 @@
     // Translates the portfolio item labels so they remain on the left side of the screen
     _timelineScrolled: function (e) {
         let x = e.currentTarget.scrollLeft;
+        let y = e.currentTarget.scrollTop;
 
-        // Return if user is scrolling vertically
-        if (x === gApp.currentScrollX) { return; }
-        gApp.currentScrollX = x;
-        gApp.currentScrollPercent = gApp._getHorizontalScrollPercent();
-        gApp._updateRowLabelLocations();
+        // Scrolling vertically
+        if (x === gApp.currentScrollX) {
+            d3.select('#axisBox').attr('transform', `translate(${gApp._rowHeight},${y})`);
+        }
+        else {
+            gApp.currentScrollX = x;
+            gApp._updateRowLabelLocations();
+        }
     },
 
     _updateRowLabelLocations: function () {
@@ -2637,10 +2725,13 @@
             _.max([gApp.maxZoom, gApp.viewportDays - zoomVal]) :
             _.min([timelineDays, gApp.viewportDays + zoomVal]);
 
-        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
-        gApp.down('#zoomOutBtn').setDisabled(gApp.viewportDays === timelineDays);
-
+        gApp._setZoomButtons();
         gApp._redrawTree();
+    },
+
+    _setZoomButtons: function () {
+        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
+        gApp.down('#zoomOutBtn').setDisabled(gApp.viewportDays === gApp._daysBetween(gApp.tlEnd, gApp.tlStart));
     },
 
     _getZoomValue() {
@@ -2772,11 +2863,6 @@
         return (Math.round(viewportWidth / (gApp.viewportDays || 1))) || 1;
     },
 
-    _getHorizontalScrollPercent: function () {
-        let vp = document.getElementById('timelineContainer');
-        return vp.scrollLeft / ((vp.scrollWidth - vp.clientWidth) || vp.clientWidth);
-    },
-
     _daysBetween: function (endDate, startDate) {
         return Rally.util.DateTime.getDifference(endDate, startDate, 'day');
     },
@@ -2801,7 +2887,7 @@
         var e = gApp.dateScaler(d.endX);
 
         d.drawnX = x;
-        d.drawnY = -gApp._rowHeight / 1.5;
+        d.drawnY = gApp._rowHeight + (gApp._showReleaseHeader() ? gApp._rowHeight / 1.5 : 0);
         d.drawnWidth = e - d.drawnX;
         d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
         d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
@@ -2815,7 +2901,7 @@
         var e = gApp.dateScaler(d.endX);
 
         d.drawnX = x;
-        d.drawnY = -(gApp._rowHeight / 1.5) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0);
+        d.drawnY = gApp._rowHeight;//-(gApp._rowHeight / 1.5) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0);
         d.drawnWidth = e - d.drawnX;
         d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
         d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
@@ -2861,76 +2947,6 @@
 
         gApp._setSVGDimensions(nodetree);
         gApp._initializeSVG();
-
-        // Expand / Collapse all
-        d3.select('#zoomTree').selectAll('.expandAll')
-            .data(gApp.expandData)
-            .enter().append('g')
-            .append('text')
-            .attr('id', 'expandAllText')
-            .attr('x', -40)
-            .attr('y', -15 - (gApp._showReleaseHeader() ? gApp._rowHeight / 1.5 : 0) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0))
-            .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
-            .attr('alignment-baseline', 'central')
-            .text(function (d) { return d.expanded ? '9' : '7'; })
-            .on('click', function (d) {
-                d.expanded = !d.expanded;
-                if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
-            });
-
-        if (gApp._showReleaseHeader()) {
-            var releases = d3.select('#zoomTree').selectAll(".releaseNode")
-                .data(gApp.releases)
-                .enter().append("g")
-                .attr('class', 'releaseNode')
-                .attr('id', function (d) { return 'release-' + d.get('Name'); })
-                .attr('transform', function (d) {
-                    gApp._initReleaseTranslate(d);
-                    return d.translate;
-                });
-
-            // Release bars
-            releases.append('rect')
-                .attr('width', function (d) { return d.drawnWidth; })
-                .attr('height', gApp._rowHeight / 2)
-                .attr('fill', '#f2f2f2')
-                .attr('stroke', '#808080')
-                .attr('stroke-opacity', 0.5);
-
-            // Release Name
-            releases.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
-                .attr('y', gApp._rowHeight / 4 + 3)
-                .text(function (d) { return d.get('Name'); });
-
-        }
-
-        if (gApp._showIterationHeader()) {
-            var iterations = d3.select('#zoomTree').selectAll('.iterationNode')
-                .data(gApp.iterations)
-                .enter().append('g')
-                .attr('class', 'iterationNode')
-                .attr('id', function (d) { return 'iteration-' + d.get('Name'); })
-                .attr('transform', function (d) {
-                    gApp._initIterationTranslate(d);
-                    return d.translate;
-                });
-
-            // Iteration bars
-            iterations.append('rect')
-                .attr('width', function (d) { return d.drawnWidth; })
-                .attr('height', gApp._rowHeight / 2)
-                .attr('fill', '#f2f2f2')
-                .attr('stroke', '#808080')
-                .attr('stroke-opacity', 0.5);
-
-            // Iteration Name
-            iterations.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
-                .attr('y', gApp._rowHeight / 4 + 3)
-                .text(function (d) { return d.get('Name'); });
-
-        }
 
         var labelGroup = d3.select('#zoomTree').append('g')
             .attr('id', 'rowLabelGroup');
@@ -4182,570 +4198,6 @@
         this.callParent(arguments);
     }
 });
-                (function () {
-    var Ext = window.Ext4 || window.Ext;
-
-    Ext.define("Rally.apps.DateMixin", {
-
-        dateFormatters: [
-            {key: "MMM", value: "%b"},
-            {key: "MM", value: "%m"},
-            {key: "dd", value: "%d"},
-            {key: "yyyy", value: "%Y"}
-        ],
-
-        dateToStringDisplay: function (date) {
-            return Ext.Date.format(date, 'm/d/Y');
-        },
-
-        dateToString: function (date) {
-            return Ext.Date.format(date, 'Y-m-d\\TH:i:s.u\\Z');
-        },
-
-        dateStringToObject: function (dateStr) {
-            var finalIndex = dateStr.indexOf('T'),
-                dateObj;
-
-            if (finalIndex > -1) {
-                dateStr = dateStr.slice(0, dateStr.indexOf('T'));
-            }
-
-            dateObj = this._splitDateParts(dateStr);
-
-            return new Date(dateObj.year, dateObj.month, dateObj.day);
-        },
-
-        _getMonth: function(month) {
-            var monthMap = { jan: 0, feb: 1, mar: 2, apr: 3,
-                             may: 4, jun: 5, jul: 6, aug: 7,
-                             sep: 8, oct: 9, nov: 10, dec: 11 };
-            if(isNaN(month)) {
-                try {
-                    month = monthMap[month.toLowerCase()];
-                } catch(err) { }
-            } else {
-                month = parseInt(month, 10) - 1;
-            }
-
-            return month.toString();
-        },
-
-        _objectFromYearFirstDate: function (dateArray) {
-            var month = 0,
-                day = 0,
-                year = 0;
-
-            if (dateArray.length !== 3) {
-                return { year: year, month: month, day: day };
-            }
-
-            year = dateArray[0];
-            month = this._getMonth(dateArray[1]);
-            day = dateArray[2];
-
-            return {
-                year: year,
-                month: month,
-                day: day
-            };
-        },
-
-        _objectFromMonthFirstDate: function (dateArray) {
-            var month = 0,
-                day = 0,
-                year = 0;
-
-            if (dateArray.length !== 3) {
-                return { year: year, month: month, day: day };
-            }
-
-            month = this._getMonth(dateArray[0]);
-            day = dateArray[1];
-            year = dateArray[2];
-
-            return {
-                month: month,
-                day: day,
-                year: year
-            };
-        },
-
-        _shouldSplitOnDash: function (dateStr) {
-            return dateStr.split('-').length === 3;
-        },
-
-        _splitDateParts: function (dateStr) {
-            if (this._shouldSplitOnDash(dateStr)) {
-                return this._objectFromYearFirstDate(dateStr.split('-'));
-            }
-            else {
-                return this._objectFromMonthFirstDate(dateStr.split('/'));
-            }
-        }
-
-    });
-
-}());
-                (function () {
-    var Ext = window.Ext4 || window.Ext;
-
-Ext.define("Rally.apps.CFDChart", {
-    extend: "Ext.Component",
-    settingsScope: "workspace",
-    projectScopeable: false,
-    alias: 'widget.explorerCFDChart',
-
-    config: {
-        app: undefined
-    },
-
-    constructor: function (config) {
-        this.mergeConfig(config);
-        this.callParent(arguments);
-    },
-
-    requires: [
-        'Rally.ui.combobox.ComboBox',
-        'Rally.util.Test',
-        'Deft.Deferred'
-    ],
-
-//    mixins: [
-//        'DateMixin'
-//    ],
-//
-    scheduleStates: ["Defined", "In-Progress", "Completed", "Accepted"],
-
-    items: [
-        {
-            xtype: 'container',
-            itemId: 'header',
-            cls: 'header'
-        }
-    ],
-
-    _setDefaultConfigValues: function () {
-        var config = Ext.clone(this.chartComponentConfig);
-        config.storeConfig.find = config.storeConfig.find || {};
-        config.calculatorConfig = config.calculatorConfig || {};
-        config.chartConfig = config.chartConfig || {};
-        config.chartConfig.title = config.chartConfig.title || {};
-        config.chartConfig.xAxis = config.chartConfig.xAxis || {};
-        config.chartConfig.xAxis.type = config.chartConfig.xAxis.type || "datetime";
-        config.chartConfig.yAxis = config.chartConfig.yAxis || [
-            {
-                title: {}
-            }
-        ];
-
-        this.chartComponentConfig = config;
-    },
-
-    _parseRallyDateFormatToHighchartsDateFormat: function () {
-        var dateFormat = this._getUserConfiguredDateFormat() || this._getWorkspaceConfiguredDateFormat();
-
-        for (var i = 0; i < this.dateFormatters.length; i++) {
-            dateFormat = dateFormat.replace(this.dateFormatters[i].key, this.dateFormatters[i].value);
-        }
-
-        return dateFormat;
-    },
-
-    _formatDate: function (date) {
-        if (!this.dateFormat) {
-            this.dateFormat = this._parseRallyDateFormatToHighchartsDateFormat();
-        }
-
-        return Highcharts.dateFormat(this.dateFormat, date.getTime());
-    },
-
-    _getTimeZone: function () {
-        return gApp.getContext().getUser().UserProfile.TimeZone || gApp.getContext().getWorkspace().WorkspaceConfiguration.TimeZone;
-    },
-
-    _getChartStartDate: function (portfolioitem) {
-
-            //If we have an actual start AND actual end, use those
-            // If not, and we still have an actual start, use the actual start and todays date as end
-            //If no actual start or actual end, then use todays date minus six months as start, todays date as end
-
-        var startDate = portfolioitem.ActualStartDate;
-        var sixMonthsAgo = Ext.Date.subtract(new Date(), Ext.Date.MONTH, 6);
-
-        if (!startDate) {
-            startDate = sixMonthsAgo;
-        }
-        return Ext.Date.format(startDate, 'Y-m-d\\TH:i:s.u\\Z');
-    },
-
-    dateFormatters: [
-        {key: "MMM", value: "%b"},
-        {key: "MM", value: "%m"},
-        {key: "dd", value: "%d"},
-        {key: "yyyy", value: "%Y"}
-    ],
-
-    _getMonth: function(month) {
-        var monthMap = { jan: 0, feb: 1, mar: 2, apr: 3,
-                         may: 4, jun: 5, jul: 6, aug: 7,
-                         sep: 8, oct: 9, nov: 10, dec: 11 };
-        if(isNaN(month)) {
-            try {
-                month = monthMap[month.toLowerCase()];
-            } catch(err) { }
-        } else {
-            month = parseInt(month, 10) - 1;
-        }
-
-        return month.toString();
-    },
-
-    _getChartEndDate: function (portfolioitem) {
-        var startDate = portfolioitem.ActualStartDate;
-        var endDate = portfolioitem.ActualEndDate;
-        var todaysDate = new Date();
-
-        if (!startDate) {
-            endDate = todaysDate;
-        } else {
-            if (!endDate) endDate = todaysDate;
-        }
-        return Ext.Date.format(endDate, 'Y-m-d\\TH:i:s.u\\Z');
-    },
-
-    _calculateDateRange: function (portfolioItem) {
-        var calcConfig = this.chartComponentConfig.calculatorConfig;
-        calcConfig.startDate = calcConfig.startDate || this._getChartStartDate(portfolioItem);
-        calcConfig.endDate = calcConfig.endDate || this._getChartEndDate(portfolioItem);
-        calcConfig.timeZone = calcConfig.timeZone || this._getTimeZone();
-
-        this.chartComponentConfig.chartConfig.xAxis.tickInterval = this._configureChartTicks(calcConfig.startDate, calcConfig.endDate);
-    },
-_objectFromYearFirstDate: function (dateArray) {
-            var month = 0,
-                day = 0,
-                year = 0;
-
-            if (dateArray.length !== 3) {
-                return { year: year, month: month, day: day };
-            }
-
-            year = dateArray[0];
-            month = this._getMonth(dateArray[1]);
-            day = dateArray[2];
-
-            return {
-                year: year,
-                month: month,
-                day: day
-            };
-        },
-
-        _objectFromMonthFirstDate: function (dateArray) {
-            var month = 0,
-                day = 0,
-                year = 0;
-
-            if (dateArray.length !== 3) {
-                return { year: year, month: month, day: day };
-            }
-
-            month = this._getMonth(dateArray[0]);
-            day = dateArray[1];
-            year = dateArray[2];
-
-            return {
-                month: month,
-                day: day,
-                year: year
-            };
-        },
-
-    _shouldSplitOnDash: function (dateStr) {
-        return dateStr.split('-').length === 3;
-    },
-
-    _splitDateParts: function (dateStr) {
-        if (this._shouldSplitOnDash(dateStr)) {
-            return this._objectFromYearFirstDate(dateStr.split('-'));
-        }
-        else {
-            return this._objectFromMonthFirstDate(dateStr.split('/'));
-        }
-    },
-
-    dateStringToObject: function (dateStr) {
-        var finalIndex = dateStr.indexOf('T'),
-            dateObj;
-
-        if (finalIndex > -1) {
-            dateStr = dateStr.slice(0, dateStr.indexOf('T'));
-        }
-
-        dateObj = this._splitDateParts(dateStr);
-
-        return new Date(dateObj.year, dateObj.month, dateObj.day);
-    },
-
-    _configureChartTicks: function (startDate, endDate) {
-        var pixelTickWidth = 125,
-            appWidth = this.container.getWidth(),
-            ticks = Math.floor(appWidth / pixelTickWidth);
-
-        var startDateObj = this.dateStringToObject(startDate),
-            endDateObj = this.dateStringToObject(endDate);
-
-        var days = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / 86400000);
-
-        return Math.floor(days / ticks);
-    },
-
-    _buildChartTitle: function (portfolioItem) {
-        var widthPerCharacter = 10,
-            totalCharacters = Math.floor(this.container.getWidth() / widthPerCharacter),
-            title = "Portfolio Item Chart",
-            align = "center";
-
-        if (portfolioItem) {
-            title = portfolioItem.FormattedID + ": " + portfolioItem.Name;
-        }
-
-        if (totalCharacters < title.length) {
-            title = title.substring(0, totalCharacters) + "...";
-            align = "left";
-        }
-
-        return {
-            text: title,
-            align: align,
-            margin: 30
-        };
-    },
-
-    _getUserConfiguredDateFormat: function () {
-        return gApp.getContext().getUser().UserProfile.DateFormat;
-    },
-
-    _getWorkspaceConfiguredDateFormat: function () {
-        return gApp.getContext().getWorkspace().WorkspaceConfiguration.DateFormat;
-    },
-
-    _updateQueryConfig: function (portfolioItem) {
-        this.chartComponentConfig.storeConfig.find._ItemHierarchy = portfolioItem.ObjectID;
-//        this.chartComponentConfig.storeConfig.find._ValidFrom = {
-//            "$gte": this._getChartStartDate(portfolioItem),
-//            "$lt" : this._getChartEndDate(portfolioItem)
-//        };
-//        this.chartComponentConfig.storeConfig.find._ValidTo = this._getChartEndDate(portfolioItem);
-    },
-
-    _onUserStoryModelRetrieved: function (model, portfolioItem) {
-        var scheduleStateValues = model.getField('ScheduleState').getAllowedStringValues();
-        this.chartComponentConfig.calculatorConfig.scheduleStates = scheduleStateValues;
-
-        this._setDynamicConfigValues(portfolioItem);
-        this._calculateDateRange(portfolioItem);
-        this._updateQueryConfig(portfolioItem);
-        this.container.insert(0, this.chartComponentConfig);
-    },
-
-    _setDynamicConfigValues: function (portfolioItem) {
-        this._updateChartConfigDateFormat();
-        this.chartComponentConfig.chartConfig.title = this._buildChartTitle(portfolioItem);
-        this.chartComponentConfig.chartConfig.subtitle = this._buildChartSubtitle(portfolioItem);
-
-        this.chartComponentConfig.calculatorConfig.chartAggregationType = 'count';
-        this.chartComponentConfig.chartConfig.yAxis[0].title.text = 'Count';
-
-        this.chartComponentConfig.chartConfig.yAxis[0].labels = {
-            x: -5,
-            y: 4
-        };
-    },
-
-
-    _updateChartConfigDateFormat: function () {
-        var self = this;
-
-        this.chartComponentConfig.chartConfig.xAxis.labels = {
-            x: 0,
-            y: 20,
-            formatter: function () {
-                return self._formatDate(self.dateStringToObject(this.value));
-            }
-        };
-    },
-
-    _buildChartSubtitle: function (portfolioItem) {
-        var widthPerCharacter = 6,
-            totalCharacters = Math.floor(this.container.getWidth() / widthPerCharacter),
-            plannedStartDate = "",
-            plannedEndDate = "";
-
-        var template = Ext.create("Ext.XTemplate",
-            '<tpl if="plannedStartDate">' +
-                '<span>Planned Start: {plannedStartDate}</span>' +
-                '    <tpl if="plannedEndDate">' +
-                '        <tpl if="tooBig">' +
-                '            <br />' +
-                '        <tpl else>' +
-                '            &nbsp;&nbsp;&nbsp;' +
-                '        </tpl>' +
-                '    </tpl>' +
-                '</tpl>' +
-                '<tpl if="plannedEndDate">' +
-                '    <span>Planned End: {plannedEndDate}</span>' +
-                '</tpl>'
-        );
-
-        if (portfolioItem && portfolioItem.PlannedStartDate) {
-            plannedStartDate = Rally.util.DateTime.formatWithDefault(portfolioItem.PlannedStartDate, gApp.getContext());
-        }
-
-        if (portfolioItem && portfolioItem.PlannedEndDate) {
-            plannedEndDate = Rally.util.DateTime.formatWithDefault(portfolioItem.PlannedEndDate, gApp.getContext());
-        }
-
-        var formattedTitle = template.apply({
-            plannedStartDate: plannedStartDate,
-            plannedEndDate: plannedEndDate,
-            tooBig: totalCharacters < plannedStartDate.length + plannedEndDate.length + 60
-        });
-
-        return {
-            text: formattedTitle,
-            useHTML: true,
-            align: "center"
-        };
-    },
-
-    chartComponentConfig: {
-        xtype: "rallychart",
-        //Colour blind safe colour range
-        chartColors: ['#d73027','#fc8d59','#fee090','#e0f3f8','#91bfdb','#4575b4'], //These should match the CSS file for the dendrogram
-        queryErrorMessage: "No User Stories to display.<br /><br />Most likely, stories are either not yet available or started for this portfolio item.",
-        aggregationErrorMessage: "Invalid/Incomplete data.<br /><br />Check the User Story Estimate data. Data is based on count and plan estimate.",
-        storeType: 'Rally.data.lookback.SnapshotStore',
-        storeConfig: {
-            find: {
-                "_TypeHierarchy": "HierarchicalRequirement",
-                "Children": null
-            },
-            removeUnauthorizedSnapshots: true,
-            compress: true,
-            fetch: ["ScheduleState", "PlanEstimate"],
-            hydrate: ["ScheduleState"],
-            sort: {
-                "_ValidFrom": 1
-            }
-        },
-        calculatorType: "Rally.apps.charts.rpm.cfd.CumulativeFlowCalculator",
-        chartConfig: {
-            chart: {
-                defaultSeriesType: "area",
-                zoomType: "xy"
-            },
-            xAxis: {
-                categories: [],
-                tickmarkPlacement: "on",
-                tickInterval: 5,
-                title: {
-                    text: "Days",
-                    margin: 10
-                }
-            },
-            yAxis: [
-                {
-                    title: {
-                        text: "Count"
-                    }
-                }
-            ],
-            tooltip: {
-                formatter: function () {
-                    return "" + this.x + "<br />" + this.series.name + ": " + this.y;
-                }
-            },
-            plotOptions: {
-                series: {
-                    marker: {
-                        enabled: false,
-                        states: {
-                            hover: {
-                                enabled: true
-                            }
-                        }
-                    },
-                    groupPadding: 0.01
-                },
-                area: {
-                    stacking: 'normal',
-                    marker: {
-                        enabled: false
-                    }
-                }
-            }
-        }
-    },
-
-    generateChart: function() {
-        var record = this.record;
-        if (!record) return; //Needs to be a record defined - error if not
-        this._setDefaultConfigValues();
-
-        Rally.data.ModelFactory.getModel({
-            type: 'UserStory',
-            success: function (model) {
-                this._onUserStoryModelRetrieved(model, record.data);
-            },
-            scope: this
-        });
-     }
-});
-}());
-                (function () {
-    var Ext = window.Ext4 || window.Ext;
-
-Ext.define("Rally.apps.charts.rpm.cfd.CumulativeFlowCalculator", {
-    extend: "Rally.data.lookback.calculator.TimeSeriesCalculator",
-
-    getDerivedFieldsOnInput: function () {
-        var chartAggregationType = this.config.chartAggregationType;
-
-        return _.map(this.config.scheduleStates, function(state) {
-            return {
-                "as": state,
-                "f": function (snapshot) {
-                    if (chartAggregationType === 'storycount') {
-                        if (snapshot.ScheduleState) {
-                            return snapshot.ScheduleState === state ? 1 : 0;
-                        }
-
-                        return 0;
-                    } else {
-                        if (snapshot.PlanEstimate) {
-                            return snapshot.ScheduleState === state ? snapshot.PlanEstimate : 0;
-                        }
-
-                        return 0;
-                    }
-
-                }
-            };
-        }, this);
-    },
-
-    getMetrics: function () {
-        return _.map(this.config.scheduleStates, function(state) {
-            return {
-                "field": state,
-                "as": state,
-                "f": "sum"
-            };
-        });
-    }
-});
-}());
                 // https://d3js.org Version 4.4.1. Copyright 2017 Mike Bostock.
 /* jshint ignore:start */
 (function (global, factory) {
@@ -21145,7 +20597,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             Rally.launchApp('CustomAgile.apps.PortfolioItemTimeline.app', {
                 name:"Enhanced Portfolio Item Timeline",
                 parentRepos:"",
-                version:"0.3.1"
+                version:"0.3.2"
             });
 
         });
@@ -21425,7 +20877,7 @@ text.expand-arrow {
   fill: #757575;
 }
 text.collapse-arrow {
-  fill: transparent;
+  fill: white;
   stroke-width: 1;
   stroke: black;
 }

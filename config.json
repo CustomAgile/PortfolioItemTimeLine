@@ -8,9 +8,6 @@
         "./node_modules/@customagile/ancestor-pi-multi-level-pi-app-filter/index.js",
         "chart-controls.js",
         "App.js",
-        "DateMixin.js",
-        "CFDChart.js",
-        "CFDCalc.js",
         "d3.js"
     ],
     "css": [

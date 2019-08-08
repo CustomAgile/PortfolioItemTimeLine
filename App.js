@@ -589,7 +589,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (records.length) {
             gApp._nodes = gApp._nodes.concat(gApp._createNodes(records));
             gApp.setLoading(`Loading portfolio items... (${gApp._nodes.length} fetched so far)`);
-            var childType = gApp._findChildType(records[0]);
+            let childType = gApp._findChildType(records[0]);
 
             if (childType) {
                 try {
@@ -735,7 +735,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (gApp.settingView || !gApp._timelineHasItems()) { return; }
 
         gApp._clearSharedViewCombo();
-        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
+        gApp._setZoomButtons();
         gApp._removeSVGTree();
         gApp._createSVGTree();
         gApp._setAxis();
@@ -765,6 +765,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .tickSize(showCalendarTicks ? height : 0)
             .tickPadding(showCalendarTicks ? 22 - height : 22);
         gApp.gX = svg.append('g');
+
+        gApp.gX.append('rect')
+            .attr('width', width - (gApp._rowHeight + 10))
+            .attr('height', gApp._rowHeight + (gApp._showIterationHeader() && gApp._showReleaseHeader() ? gApp._rowHeight : 0))
+            .attr('fill', 'white');
+
         gApp.gX.attr('transform', 'translate(' + gApp._rowHeight + ',0)')
             .attr('id', 'axisBox')
             .attr('width', width - (gApp._rowHeight + 10))
@@ -869,6 +875,78 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     d3.select('#todayLineTooltip').remove();
                 });
         }
+
+        if (gApp._showReleaseHeader()) {
+            var releases = gApp.gX.selectAll(".releaseNode")
+                .data(gApp.releases)
+                .enter().append("g")
+                .attr('class', 'releaseNode')
+                .attr('id', function (d) { return 'release-' + d.get('Name'); })
+                .attr('transform', function (d) {
+                    gApp._initReleaseTranslate(d);
+                    return d.translate;
+                });
+
+            // Release bars
+            releases.append('rect')
+                .attr('width', function (d) { return d.drawnWidth; })
+                .attr('height', gApp._rowHeight / 2)
+                .attr('fill', '#f2f2f2')
+                .attr('stroke', '#808080')
+                .attr('stroke-opacity', 0.5);
+
+            // Release Name
+            releases.append('text')
+                .attr('x', function (d) { return d.drawnWidth / 2; })
+                .attr('y', gApp._rowHeight / 4 + 3)
+                .text(function (d) { return d.get('Name'); })
+                .attr('fill', 'black');
+        }
+
+        if (gApp._showIterationHeader()) {
+            var iterations = gApp.gX.selectAll('.iterationNode')
+                .data(gApp.iterations)
+                .enter().append('g')
+                .attr('class', 'iterationNode')
+                .attr('id', function (d) { return 'iteration-' + d.get('Name'); })
+                .attr('transform', function (d) {
+                    gApp._initIterationTranslate(d);
+                    return d.translate;
+                });
+
+            // Iteration bars
+            iterations.append('rect')
+                .attr('width', function (d) { return d.drawnWidth; })
+                .attr('height', gApp._rowHeight / 2)
+                .attr('fill', '#f2f2f2')
+                .attr('stroke', '#808080')
+                .attr('stroke-opacity', 0.5);
+
+            // Iteration Name
+            iterations.append('text')
+                .attr('x', function (d) { return d.drawnWidth / 2; })
+                .attr('y', gApp._rowHeight / 4 + 3)
+                .text(function (d) { return d.get('Name'); })
+                .attr('fill', 'black');
+        }
+
+        // Expand / Collapse all
+        gApp.gX.selectAll('.expandAll')
+            .data(gApp.expandData)
+            .enter().append('g')
+            .append('text')
+            .attr('id', 'expandAllText')
+            .attr('x', 0)
+            .attr('y', 25)
+            .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
+            .attr('alignment-baseline', 'central')
+            .text(function (d) { return d.expanded ? '9' : '7'; })
+            .on('click', function (d) {
+                d.expanded = !d.expanded;
+                if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
+            });
+
+        gApp._timelineScrolled({ currentTarget: { scrollLeft: gApp.currentScrollX, scrollTop: document.getElementById('timelineContainer').scrollTop } });
     },
 
     // Called when user clicks on an item in the timeline
@@ -887,10 +965,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _addHoverTooltip: function (hoverEl, hoverElClass, tipId, tipText, width, height) {
         let coords = d3.mouse(hoverEl);
-        let tooltip = d3.select('#rootSurface').append('g')
+        let tooltip = d3.select('#axisBox').append('g')
             .attr('id', tipId)
             .attr('class', 'timeline-tooltip')
-            .attr('transform', `translate(${coords[0] + 55},${coords[1]})`);
+            .attr('transform', `translate(${coords[0] + 20},${coords[1]})`);
 
         tooltip.append('rect')
             .attr('width', width)
@@ -899,13 +977,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .attr('ry', 7);
 
         let textObj = tooltip.append('text')
-            .attr('x', 5)
-            .attr('y', 2)
+            .attr('y', 3)
             .text('');
 
         _.each(tipText, function (newLine) {
             textObj.append('tspan')
-                .attr('x', 7)
+                .attr('x', width / 2)
                 .attr('dy', '1.3em')
                 .text(newLine);
         });
@@ -917,6 +994,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (!gApp.preventViewReset) {
             gApp.down('#timelineSharedViewCombobox').setValue(null);
         }
+    },
+
+    _resetAxis: function () {
+        gApp._findDateRange();
+        gApp._initialiseScale();
     },
 
     _resetView: function () {
@@ -958,7 +1040,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
     },
 
-    _onAxisDateChange: function () {
+    _onAxisDateChange: function (dateField, isValid) {
+        if (!isValid) { return; }
+
         var axisStart = gApp.down('#axisStartDate');
         var startDate = axisStart.getValue();
 
@@ -989,12 +1073,16 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     // Translates the portfolio item labels so they remain on the left side of the screen
     _timelineScrolled: function (e) {
         let x = e.currentTarget.scrollLeft;
+        let y = e.currentTarget.scrollTop;
 
-        // Return if user is scrolling vertically
-        if (x === gApp.currentScrollX) { return; }
-        gApp.currentScrollX = x;
-        gApp.currentScrollPercent = gApp._getHorizontalScrollPercent();
-        gApp._updateRowLabelLocations();
+        // Scrolling vertically
+        if (x === gApp.currentScrollX) {
+            d3.select('#axisBox').attr('transform', `translate(${gApp._rowHeight},${y})`);
+        }
+        else {
+            gApp.currentScrollX = x;
+            gApp._updateRowLabelLocations();
+        }
     },
 
     _updateRowLabelLocations: function () {
@@ -1010,10 +1098,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             _.max([gApp.maxZoom, gApp.viewportDays - zoomVal]) :
             _.min([timelineDays, gApp.viewportDays + zoomVal]);
 
-        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
-        gApp.down('#zoomOutBtn').setDisabled(gApp.viewportDays === timelineDays);
-
+        gApp._setZoomButtons();
         gApp._redrawTree();
+    },
+
+    _setZoomButtons: function () {
+        gApp.down('#zoomInBtn').setDisabled(gApp.viewportDays === gApp.maxZoom);
+        gApp.down('#zoomOutBtn').setDisabled(gApp.viewportDays === gApp._daysBetween(gApp.tlEnd, gApp.tlStart));
     },
 
     _getZoomValue() {
@@ -1145,11 +1236,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return (Math.round(viewportWidth / (gApp.viewportDays || 1))) || 1;
     },
 
-    _getHorizontalScrollPercent: function () {
-        let vp = document.getElementById('timelineContainer');
-        return vp.scrollLeft / ((vp.scrollWidth - vp.clientWidth) || vp.clientWidth);
-    },
-
     _daysBetween: function (endDate, startDate) {
         return Rally.util.DateTime.getDifference(endDate, startDate, 'day');
     },
@@ -1174,7 +1260,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var e = gApp.dateScaler(d.endX);
 
         d.drawnX = x;
-        d.drawnY = -gApp._rowHeight / 1.5;
+        d.drawnY = gApp._rowHeight + (gApp._showReleaseHeader() ? gApp._rowHeight / 1.5 : 0);
         d.drawnWidth = e - d.drawnX;
         d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
         d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
@@ -1188,7 +1274,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var e = gApp.dateScaler(d.endX);
 
         d.drawnX = x;
-        d.drawnY = -(gApp._rowHeight / 1.5) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0);
+        d.drawnY = gApp._rowHeight;//-(gApp._rowHeight / 1.5) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0);
         d.drawnWidth = e - d.drawnX;
         d.drawnWidth = d.drawnWidth < 0 ? 0 : d.drawnWidth;
         d.translate = "translate(" + d.drawnX + "," + d.drawnY + ")";
@@ -1234,76 +1320,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         gApp._setSVGDimensions(nodetree);
         gApp._initializeSVG();
-
-        // Expand / Collapse all
-        d3.select('#zoomTree').selectAll('.expandAll')
-            .data(gApp.expandData)
-            .enter().append('g')
-            .append('text')
-            .attr('id', 'expandAllText')
-            .attr('x', -40)
-            .attr('y', -15 - (gApp._showReleaseHeader() ? gApp._rowHeight / 1.5 : 0) - (gApp._showIterationHeader() ? gApp._rowHeight / 1.5 : 0))
-            .attr('class', function (d) { return 'icon-gear app-menu ' + (d.expanded ? 'collapse-arrow' : 'expand-arrow'); })
-            .attr('alignment-baseline', 'central')
-            .text(function (d) { return d.expanded ? '9' : '7'; })
-            .on('click', function (d) {
-                d.expanded = !d.expanded;
-                if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
-            });
-
-        if (gApp._showReleaseHeader()) {
-            var releases = d3.select('#zoomTree').selectAll(".releaseNode")
-                .data(gApp.releases)
-                .enter().append("g")
-                .attr('class', 'releaseNode')
-                .attr('id', function (d) { return 'release-' + d.get('Name'); })
-                .attr('transform', function (d) {
-                    gApp._initReleaseTranslate(d);
-                    return d.translate;
-                });
-
-            // Release bars
-            releases.append('rect')
-                .attr('width', function (d) { return d.drawnWidth; })
-                .attr('height', gApp._rowHeight / 2)
-                .attr('fill', '#f2f2f2')
-                .attr('stroke', '#808080')
-                .attr('stroke-opacity', 0.5);
-
-            // Release Name
-            releases.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
-                .attr('y', gApp._rowHeight / 4 + 3)
-                .text(function (d) { return d.get('Name'); });
-
-        }
-
-        if (gApp._showIterationHeader()) {
-            var iterations = d3.select('#zoomTree').selectAll('.iterationNode')
-                .data(gApp.iterations)
-                .enter().append('g')
-                .attr('class', 'iterationNode')
-                .attr('id', function (d) { return 'iteration-' + d.get('Name'); })
-                .attr('transform', function (d) {
-                    gApp._initIterationTranslate(d);
-                    return d.translate;
-                });
-
-            // Iteration bars
-            iterations.append('rect')
-                .attr('width', function (d) { return d.drawnWidth; })
-                .attr('height', gApp._rowHeight / 2)
-                .attr('fill', '#f2f2f2')
-                .attr('stroke', '#808080')
-                .attr('stroke-opacity', 0.5);
-
-            // Iteration Name
-            iterations.append('text')
-                .attr('x', function (d) { return d.drawnWidth / 2 - (d.get('Name').length * 2.7); })
-                .attr('y', gApp._rowHeight / 4 + 3)
-                .text(function (d) { return d.get('Name'); });
-
-        }
 
         var labelGroup = d3.select('#zoomTree').append('g')
             .attr('id', 'rowLabelGroup');

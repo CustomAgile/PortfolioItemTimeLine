@@ -1,6 +1,6 @@
 {
   "name": "portfolio-item-timeline",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "dependencies": {
     "@agile-central-technical-services/utils-shared-views": "^1.0.2",

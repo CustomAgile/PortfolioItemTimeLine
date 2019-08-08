@@ -93,7 +93,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                 style: this.fontStyle,
                 margin: 0,
                 itemId: 'resetViewBtn',
-                handler: this.cmp._initialiseScale
+                handler: this.cmp._resetAxis
             },
             {
                 xtype: 'panel',
