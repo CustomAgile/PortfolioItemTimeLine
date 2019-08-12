@@ -483,3 +483,45 @@ text.collapse-arrow {
   font-size: 14px;
   color: #006488;
 }
+
+.timelineLegend {
+  float: right;
+  width: 430px;
+  padding: 5px 0
+}
+
+.timelineLegend.print {
+  float: none;
+  overflow: auto;
+  margin: 5px
+}
+
+.timelineLegend b {
+  padding-right: 10px;
+  float: left
+}
+
+.timelineLegend div {
+  float: left;
+  margin-left: 14px
+}
+
+.timelineLegend .legend-item {
+  float: left;
+  -webkit-border-radius: 2px;
+  -moz-border-radius: 2px;
+  -ms-border-radius: 2px;
+  -o-border-radius: 2px;
+  border-radius: 2px;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  margin-top: 1px
+}
+
+.timelineLegend .legend-item.planned {
+  margin-top: 3px;
+  height: 7px;
+  width: 20px;
+  background-color: rgb(188, 189, 220);
+}

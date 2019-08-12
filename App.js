@@ -225,6 +225,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             visible: false
                         }
                     ]
+                },
+                {
+                    xtype: 'component',
+                    cls: 'timelineLegend',
+                    html: '<b><span class="legend-text">Legend</span></b><div><span class="legend-item planned"></span><span class="legend-text">Planned</span></div><div><span class="legend-item" style="background-color: #F66349"></span><span class="legend-text">Late</span></div><div><span class="legend-item" style="background-color: #FFC91C"></span><span class="legend-text">At Risk</span></div><div><span class="legend-item" style="background-color: #5CBA49"></span><span class="legend-text">On Track</span></div><div><span class="legend-item" style="background-color: #C0C0C0"></span><span class="legend-text">Complete</span></div>'
                 }
             ]
         }

@@ -3,8 +3,8 @@
 <head>
     <title>Enhanced Portfolio Item Timeline</title>
     <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
-    <!--  Build Date: Thu Aug 08 2019 18:20:12 GMT-0500 (Central Daylight Time) -->
-    <!--  Version: "0.3.2"-->
+    <!--  Build Date: Mon Aug 12 2019 15:18:53 GMT-0600 (Mountain Daylight Time) -->
+    <!--  Version: "0.3.3"-->
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
     <script type="text/javascript">
@@ -1861,6 +1861,11 @@
                             visible: false
                         }
                     ]
+                },
+                {
+                    xtype: 'component',
+                    cls: 'timelineLegend',
+                    html: '<b><span class="legend-text">Legend</span></b><div><span class="legend-item planned"></span><span class="legend-text">Planned</span></div><div><span class="legend-item" style="background-color: #F66349"></span><span class="legend-text">Late</span></div><div><span class="legend-item" style="background-color: #FFC91C"></span><span class="legend-text">At Risk</span></div><div><span class="legend-item" style="background-color: #5CBA49"></span><span class="legend-text">On Track</span></div><div><span class="legend-item" style="background-color: #C0C0C0"></span><span class="legend-text">Complete</span></div>'
                 }
             ]
         }
@@ -20606,7 +20611,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             Rally.launchApp('CustomAgile.apps.PortfolioItemTimeline.app', {
                 name:"Enhanced Portfolio Item Timeline",
                 parentRepos:"",
-                version:"0.3.2"
+                version:"0.3.3"
             });
 
         });
@@ -20994,6 +20999,42 @@ text.collapse-arrow {
 #filter-help-icon span {
   font-size: 14px;
   color: #006488;
+}
+.timelineLegend {
+  float: right;
+  width: 430px;
+  padding: 5px 0;
+}
+.timelineLegend.print {
+  float: none;
+  overflow: auto;
+  margin: 5px;
+}
+.timelineLegend b {
+  padding-right: 10px;
+  float: left;
+}
+.timelineLegend div {
+  float: left;
+  margin-left: 14px;
+}
+.timelineLegend .legend-item {
+  float: left;
+  -webkit-border-radius: 2px;
+  -moz-border-radius: 2px;
+  -ms-border-radius: 2px;
+  -o-border-radius: 2px;
+  border-radius: 2px;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  margin-top: 1px;
+}
+.timelineLegend .legend-item.planned {
+  margin-top: 3px;
+  height: 7px;
+  width: 20px;
+  background-color: #bcbddc;
 }
 
     </style>
