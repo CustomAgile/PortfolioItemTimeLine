@@ -1326,20 +1326,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp._setSVGDimensions(nodetree);
         gApp._initializeSVG();
 
-        var labelGroup = d3.select('#zoomTree').append('g')
-            .attr('id', 'rowLabelGroup');
-
-        var labelGroupRows = labelGroup.selectAll('.textRows')
-            .data(nodetree.descendants())
-            .enter().filter(function (d) { return d.data.record.id === "root" ? gApp._shouldShowRoot() : true; })
-            .append("g")
-            .attr('class', function (d) { return 'timelineRowText' + ((d.children || d._children) ? ' childrenText' : ''); })
-            .attr('transform', function (d) {
-                gApp._initTextRowTranslate(d);
-                return d.textTranslate;
-            });
-
-
         var rows = d3.select('#zoomTree').selectAll(".node")
             .data(nodetree.descendants())
             .enter().filter(function (d) { return d.data.record.id === "root" ? gApp._shouldShowRoot() : true; })
@@ -1416,6 +1402,19 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 if (!d3.event.altKey && d.data.record.get('PlannedStartDate') && d.data.record.get('PlannedEndDate')) {
                     gApp._setViewportToPi(d);
                 }
+            });
+
+        var labelGroup = d3.select('#zoomTree').append('g')
+            .attr('id', 'rowLabelGroup');
+
+        var labelGroupRows = labelGroup.selectAll('.textRows')
+            .data(nodetree.descendants())
+            .enter().filter(function (d) { return d.data.record.id === "root" ? gApp._shouldShowRoot() : true; })
+            .append("g")
+            .attr('class', function (d) { return 'timelineRowText' + ((d.children || d._children) ? ' childrenText' : ''); })
+            .attr('transform', function (d) {
+                gApp._initTextRowTranslate(d);
+                return d.textTranslate;
             });
 
         // Triple bar symbol (hamburger button)
