@@ -321,21 +321,8 @@ circle.no--errors {
 }
 
 .apply-filters-button {
-  /* position: absolute;
-  right: 150px;
-  top: 12px; */
   background-color: #75c63f;
 }
-
-/* .inline-filter-panel .filter-target-combo {
-  position: absolute;
-  right: 320px;
-  top: 12px;
-} */
-
-/* .inline-filter-panel>.x-panel-body .quick-filter-panel {
-  padding-right: 550px;
-} */
 
 #zoomInBtn, #zoomOutBtn {
   padding: 0;

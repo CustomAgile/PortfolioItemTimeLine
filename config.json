@@ -4,8 +4,10 @@
     "server": "https://rally1.rallydev.com",
     "sdk": "2.1",
     "javascript": [
-        "node_modules/@agile-central-technical-services/utils-shared-views/index.js",
+        "./node_modules/custom-agile-toolkit/web.js",
+        "./node_modules/@agile-central-technical-services/utils-shared-views/index.js",
         "./node_modules/@customagile/ancestor-pi-multi-level-pi-app-filter/index.js",
+        "Query.js",
         "chart-controls.js",
         "App.js",
         "d3.js"
