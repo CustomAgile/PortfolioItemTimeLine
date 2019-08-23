@@ -563,7 +563,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var limit;
 
         if (gApp.getSetting('hideArchived')) {
-            query = new Query('Archived', '=', 'false');
+            query = new Rally.data.wsapi.Filter({
+                property: 'Archived',
+                value: false
+            });
         }
 
         // If scoping is set to all projects and we're retrieving the top level PIs
@@ -610,25 +613,34 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 parentIds.push(parent.ObjectID);
             });
 
-            if (query) {
-                query = query.and('Parent.ObjectID', 'in', ',' + parentIds.join(','));
-            }
-            else {
-                query = new Query('Parent.ObjectID', 'in', ',' + parentIds.join(','));
-            }
+            let parentFilter = new Rally.data.wsapi.Filter({
+                property: 'Parent.ObjectID',
+                operator: 'in',
+                value: parentIds
+            });
+
+            parentFilter.toString = function () { return '(Parent.ObjectID in ,' + parentIds.join(',') + ')'; };
+
+            if (query) { query = query.and(parentFilter); }
+            else { query = parentFilter; }
         }
         else {
             filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath);
         }
 
-        _.each(filters, function (filter) {
-            if (query) {
-                query = query.and(filter.property, filter.operator, filter.value);
+        for (let i = 0; i < filters.length; i++) {
+            if (filters[i].property === 'Release') {
+                let release = await this.client.get(filters[i].value, { fetch: ['Name'] });
+                if (release) {
+                    filters[i] = new Rally.data.wsapi.Filter({
+                        property: 'Release.Name',
+                        value: release.Name
+                    });
+                }
             }
-            else {
-                query = new Query(filter.property, filter.operator, filter.value);
-            }
-        }.bind(this));
+            if (query) { query = query.and(filters[i]); }
+            else { query = filters[i]; }
+        }
 
         if (!scopeAllProjects && typePath === topLevelTypePath) {
             project = context.getProjectRef();
@@ -639,7 +651,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             projectScopeUp: context.getProjectScopeUp(),
             projectScopeDown: context.getProjectScopeDown(),
             enablePostGet: true,
-            query: query ? query.toQueryString() : "",
+            query: query ? query.toString() : "",
             pagesize,
             limit,
             fetch: gApp.STORE_FETCH_FIELD_LIST
