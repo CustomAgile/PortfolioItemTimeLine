@@ -633,19 +633,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             else { query = parentFilter; }
         }
         else {
-            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath);
+            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, false);
         }
 
         for (let i = 0; i < filters.length; i++) {
-            // if (filters[i].property === 'Release') {
-            //     let release = await this.client.get(filters[i].value, { fetch: ['Name'] });
-            //     if (release) {
-            //         filters[i] = new Rally.data.wsapi.Filter({
-            //             property: 'Release.Name',
-            //             value: release.Name
-            //         });
-            //     }
-            // }
             if (query) { query = query.and(filters[i]); }
             else { query = filters[i]; }
         }
