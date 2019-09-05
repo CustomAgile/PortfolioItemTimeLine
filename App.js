@@ -312,8 +312,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             {
                 xtype: 'tabpanel',
                 cls: 'blue-tabs',
-                activeTab: 0,
+                activeTab: 1,
                 plain: true,
+                hideMode: 'offsets',
                 autoRender: true,
                 minTabWidth: 140,
                 items: [
@@ -423,6 +424,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             labelStyle: 'font-size: 14px',
             ownerLabel: '',
             ownerLabelWidth: 0,
+            whiteListFields: ['Milestones', 'Tags'],
             settingsConfig: {
                 labelWidth: 150,
                 padding: 10
@@ -525,9 +527,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             // RESOLVE
             function () {
                 gApp._removeChildlessNodes();
-                gApp._findDateRange();
-                gApp._recalculateTree();
-                if (!gApp._isAncestorSelected()) { gApp._collapseAll(); }
+
+                if (!gApp._nodes.length || (gApp._nodes.length === 1 && gApp._nodes[0].Name === 'root')) {
+                    gApp._showError('No Portfolio Items found with given filters and scoping');
+                }
+                else {
+                    gApp._findDateRange();
+                    gApp._recalculateTree();
+                    if (!gApp._isAncestorSelected()) { gApp._collapseAll(); }
+                }
             },
             // REJECT
             function (error) {
@@ -605,7 +613,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         // to the current PI type
         let filters = [];
         if (parentRecords) {
-            filters = gApp.ancestorFilterPlugin.getFiltersOfSingleType(typePath);
+            filters = await gApp.ancestorFilterPlugin.getFiltersOfSingleType(typePath);
 
             var parentIds = [];
 
@@ -629,15 +637,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
 
         for (let i = 0; i < filters.length; i++) {
-            if (filters[i].property === 'Release') {
-                let release = await this.client.get(filters[i].value, { fetch: ['Name'] });
-                if (release) {
-                    filters[i] = new Rally.data.wsapi.Filter({
-                        property: 'Release.Name',
-                        value: release.Name
-                    });
-                }
-            }
+            // if (filters[i].property === 'Release') {
+            //     let release = await this.client.get(filters[i].value, { fetch: ['Name'] });
+            //     if (release) {
+            //         filters[i] = new Rally.data.wsapi.Filter({
+            //             property: 'Release.Name',
+            //             value: release.Name
+            //         });
+            //     }
+            // }
             if (query) { query = query.and(filters[i]); }
             else { query = filters[i]; }
         }
@@ -1471,13 +1479,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var svgHeight = gApp._getSVGHeight();
 
         d.plannedDrawnX = plannedX;
-        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
+        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - gApp.rootHeight;
         d.plannedDrawnWidth = plannedE - d.plannedDrawnX;
         d.plannedDrawnWidth = d.plannedDrawnWidth < 0 ? 0 : d.plannedDrawnWidth;
         d.plannedTranslate = "translate(" + d.plannedDrawnX + "," + d.plannedDrawnY + ")";
 
         d.actualDrawnX = (actualX < 0 ? 0 : actualX);
-        d.actualDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight) + (gApp._rowHeight / 2)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
+        d.actualDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight) + (gApp._rowHeight / 2)) - gApp.rootHeight;
         d.actualDrawnWidth = actualE - d.actualDrawnX;
         d.actualDrawnWidth = d.actualDrawnWidth < 0 ? 0 : d.actualDrawnWidth;
         d.actualTranslate = "translate(" + d.actualDrawnX + "," + d.actualDrawnY + ")";
@@ -1485,13 +1493,14 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _initTextRowTranslate: function (d) {
         var svgHeight = gApp._getSVGHeight();
-        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
+        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - gApp.rootHeight;
         d.textDrawnX = 0;
         d.textTranslate = "translate(" + d.textDrawnX + "," + d.plannedDrawnY + ")";
     },
 
     _createSVGTree: function () {
         var symbolWidth = 20;
+        gApp.rootHeight = gApp._shouldShowRoot() ? 0 : gApp._rowHeight;
         gApp._nodeTree.sum(function () { return 1; });
         var partition = d3.partition();
         var nodetree = partition(gApp._nodeTree);

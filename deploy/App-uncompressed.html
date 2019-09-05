@@ -3,8 +3,8 @@
 <head>
     <title>Enhanced Portfolio Item Timeline</title>
     <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
-    <!--  Build Date: Fri Aug 23 2019 14:21:59 GMT-0700 (Pacific Daylight Time) -->
-    <!--  Version: "0.3.6"-->
+    <!--  Build Date: Thu Sep 05 2019 09:45:20 GMT-0700 (Pacific Daylight Time) -->
+    <!--  Version: "0.3.7"-->
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
     <script type="text/javascript">
@@ -136,7 +136,7 @@
          * @cfg {Array}
          * Whitelist array for inline filters
          */
-        whiteListFields: [],
+        whiteListFields: ['Tags', 'Milstones'],
 
         /**
          * @cfg {Array}
@@ -271,6 +271,9 @@
                 this.portfolioItemTypes = piTypes;
                 Promise.all([this._addAncestorControls(), this._addFilters()]).then(
                     function () {
+                        // _.each(this.filterControls, function (filterControl) {
+                        //     filterControl.inlineFilterButton._removeInvalidFilters();
+                        // });
                         this._setReady();
                     }.bind(this),
                     function (error) {
@@ -342,7 +345,7 @@
     },
 
     // Returns an array containing all of the filters applied in the
-    // multi-level filter. type is the TypeDefinition for the Portfolio 
+    // multi-level filter. type is the TypeDefinition.TypePath for the Portfolio 
     // Item level you wish to fetch.
     getMultiLevelFiltersForType: async function (type) {
         let filters = [];
@@ -352,7 +355,10 @@
 
         for (let i = 0; i < keys.length; i++) {
             let key = keys[i];
-            let val = multiLevelFilters[keys[i]];
+            let val = multiLevelFilters[key];
+
+            await this._convertReleaseFilters(val);
+
             if (modelName === key.toLowerCase()) {
                 filters = filters.concat(val);
             }
@@ -388,7 +394,6 @@
 
                         if (hasCustomFieldFilters) {
                             let parentIDs = await new Promise(function (resolve) { this._getFilteredIds(currentLevelFiltersWithoutParent, key, resolve); }.bind(this));
-                            console.log('parentids', parentIDs, ',' + _.map(parentIDs, function (id) { return id.get('ObjectID'); }).join(','));
                             if (parentIDs.length) {
                                 filters.push(new Rally.data.wsapi.Filter({
                                     property: property + '.ObjectID',
@@ -416,17 +421,21 @@
     },
 
     // Returns an array containing all of the filters applied to a specific PI level.
-    // type is the TypeDefinition for the Portfolio Item level you wish to fetch.
-    getFiltersOfSingleType: function (type) {
+    // type is the TypeDefinition.TypePath for the Portfolio Item level you wish to fetch.
+    getFiltersOfSingleType: async function (type) {
         let filters = [];
         let modelName = type.toLowerCase();
         let multiLevelFilters = this.getMultiLevelFilters();
+        let keys = Object.keys(multiLevelFilters);
 
-        _.each(multiLevelFilters, function (val, key) {
+        for (let i = 0; i < keys.length; i++) {
+            let key = keys[i];
+            let val = multiLevelFilters[key];
             if (modelName === key.toLowerCase()) {
+                await this._convertReleaseFilters(val);
                 filters = filters.concat(val);
             }
-        }.bind(this));
+        }
 
         return filters;
     },
@@ -446,6 +455,53 @@
         });
 
         return filters;
+    },
+
+    // removeInvalidFilters: function () {
+    //     _.each(this.filterControls, function (filterControl) {
+    //         filterControl.inlineFilterButton._removeInvalidFilters();
+    //     }, this);
+    // },
+
+    // Takes an array of filters. If scoping across all projects, we need to update any release
+    // filters to filter on the release name rather than the release value
+    _convertReleaseFilters: async function (filters) {
+        if (this.getIgnoreProjectScope()) {
+            for (let i = 0; i < filters.length; i++) {
+                if (filters[i].property === 'Release') {
+                    let release = await this._getRelease(filters[i].value);
+                    if (release) {
+                        filters[i] = new Rally.data.wsapi.Filter({
+                            property: 'Release.Name',
+                            value: release.Name
+                        });
+                    }
+                }
+            }
+        }
+    },
+
+    _getRelease: async function (releaseVal) {
+        let deferred = Ext.create('Deft.Deferred');
+
+        Ext.Ajax.request({
+            url: Ext.String.format('/slm/webservice/v2.0{0}?fetch=Name', releaseVal),
+            success(response) {
+                if (response && response.responseText) {
+                    let obj = Ext.JSON.decode(response.responseText);
+                    if (obj && obj.Release) {
+                        deferred.resolve(obj.Release);
+                    }
+                    else {
+                        deferred.resolve(null);
+                    }
+                } else {
+                    deferred.resolve(null);
+                }
+            }
+        });
+
+        return deferred.promise;
     },
 
     getSelectedPiRecord: function () {
@@ -502,7 +558,7 @@
     // Returns an array of records fitting the given filters
     _getFilteredIds: function (filters, model, resolve) {
         let dataContext = Rally.getApp().getContext().getDataContext();
-        if (this._ignoreProjectScope()) {
+        if (this.getIgnoreProjectScope()) {
             dataContext.project = null;
         }
 
@@ -603,7 +659,18 @@
     },
 
     _setReady: function () {
+        this._updateReleaseValues();
+
         this.ready = true;
+
+        if (this._isSubscriber() && this.tabPanel) {
+            this.tabPanel.hide();
+        }
+
+        if (this._isSubscriber() && this.showFiltersBtn) {
+            this.showFiltersBtn.hide();
+        }
+
         this.fireEvent('ready', this);
     },
 
@@ -683,6 +750,27 @@
         }, this);
         // apply any settings config to each field added by the plugin
         return pluginSettingsFields.concat(fields || []);
+    },
+
+    // When changing projects, if a release filter was previously applied, the inline filter state remembers the release
+    // filter, but fails to populate the comobobox with the release name, which becomes misleading to 
+    // the end user. This hack finds the release name and shoves it into the combobox.
+    _updateReleaseValues: function () {
+        _.each(this.filterControls, function (filter) {
+            _.each(filter.inlineFilterButton.inlineFilterPanel.advancedFilterPanel.advancedFilterRows.rows, function (row) {
+                if (row.name === 'Release' && row._valueFieldIsValid()) {
+                    _.each(row.items.items, function (rowItem) {
+                        if (rowItem.xtype === 'rallyreleasecombobox') {
+                            this._getRelease(rowItem.originalValue).then(function (release) {
+                                if (release) {
+                                    rowItem.rawValue = release.Name;
+                                }
+                            });
+                        }
+                    }, this);
+                }
+            }, this);
+        }, this);
     },
 
     // Requires that app settings are available (e.g. from 'beforelaunch')
@@ -1031,6 +1119,10 @@
     },
 
     _ignoreProjectScope: function () {
+        if (this._isSubscriber()) {
+            return this.publishedValue.ignoreProjectScope;
+        }
+
         var result = false;
         if (this._showIgnoreProjectScopeControl()) {
             // If the control is shown, that values overrides the ignoreScope app setting
@@ -1152,6 +1244,7 @@
                                     plain: true,
                                     autoRender: true,
                                     hidden: this._isSubscriber(),
+                                    hideMode: 'offsets',
                                     items: []
                                 });
 
@@ -1163,6 +1256,7 @@
                                         this.filterControls.push(Ext.create('Rally.ui.inlinefilter.InlineFilterControl', {
                                             xtype: 'rallyinlinefiltercontrol',
                                             name: filterName,
+                                            autoRender: true,
                                             stateful: true,
                                             stateId: this.cmp.getContext().getScopedStateId(`multi-${filterName}-control`),
                                             itemId: filterName,
@@ -1174,6 +1268,7 @@
                                                 modelNames: key,
                                                 filterChildren: this.filterChildren,
                                                 inlineFilterPanelConfig: {
+                                                    autoRender: true,
                                                     name: `${filterName}-panel`,
                                                     itemId: `${filterName}-panel`,
                                                     model: model,
@@ -1312,6 +1407,7 @@
 
     _onFilterReady: function (panel) {
         panel.expand();
+        // panel._removeInvalidFilters();
         let filterCount = panel.quickFilterPanel.getFilters().length + panel.advancedFilterPanel.getFilters().length;
         let modelName = (panel.model && panel.model.elementName) || 'unknown';
 
@@ -1321,6 +1417,8 @@
             itemId: `${modelName}-tab`,
 
         });
+
+        // this.tabPanel.setActiveTab(tab);
 
         tab.add({
             xtype: 'container',
@@ -2097,8 +2195,9 @@ function where(left, op, right) {
             {
                 xtype: 'tabpanel',
                 cls: 'blue-tabs',
-                activeTab: 0,
+                activeTab: 1,
                 plain: true,
+                hideMode: 'offsets',
                 autoRender: true,
                 minTabWidth: 140,
                 items: [
@@ -2208,6 +2307,7 @@ function where(left, op, right) {
             labelStyle: 'font-size: 14px',
             ownerLabel: '',
             ownerLabelWidth: 0,
+            whiteListFields: ['Milestones', 'Tags'],
             settingsConfig: {
                 labelWidth: 150,
                 padding: 10
@@ -2310,9 +2410,15 @@ function where(left, op, right) {
             // RESOLVE
             function () {
                 gApp._removeChildlessNodes();
-                gApp._findDateRange();
-                gApp._recalculateTree();
-                if (!gApp._isAncestorSelected()) { gApp._collapseAll(); }
+
+                if (!gApp._nodes.length || (gApp._nodes.length === 1 && gApp._nodes[0].Name === 'root')) {
+                    gApp._showError('No Portfolio Items found with given filters and scoping');
+                }
+                else {
+                    gApp._findDateRange();
+                    gApp._recalculateTree();
+                    if (!gApp._isAncestorSelected()) { gApp._collapseAll(); }
+                }
             },
             // REJECT
             function (error) {
@@ -2390,7 +2496,7 @@ function where(left, op, right) {
         // to the current PI type
         let filters = [];
         if (parentRecords) {
-            filters = gApp.ancestorFilterPlugin.getFiltersOfSingleType(typePath);
+            filters = await gApp.ancestorFilterPlugin.getFiltersOfSingleType(typePath);
 
             var parentIds = [];
 
@@ -2414,15 +2520,15 @@ function where(left, op, right) {
         }
 
         for (let i = 0; i < filters.length; i++) {
-            if (filters[i].property === 'Release') {
-                let release = await this.client.get(filters[i].value, { fetch: ['Name'] });
-                if (release) {
-                    filters[i] = new Rally.data.wsapi.Filter({
-                        property: 'Release.Name',
-                        value: release.Name
-                    });
-                }
-            }
+            // if (filters[i].property === 'Release') {
+            //     let release = await this.client.get(filters[i].value, { fetch: ['Name'] });
+            //     if (release) {
+            //         filters[i] = new Rally.data.wsapi.Filter({
+            //             property: 'Release.Name',
+            //             value: release.Name
+            //         });
+            //     }
+            // }
             if (query) { query = query.and(filters[i]); }
             else { query = filters[i]; }
         }
@@ -3256,13 +3362,13 @@ function where(left, op, right) {
         var svgHeight = gApp._getSVGHeight();
 
         d.plannedDrawnX = plannedX;
-        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
+        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - gApp.rootHeight;
         d.plannedDrawnWidth = plannedE - d.plannedDrawnX;
         d.plannedDrawnWidth = d.plannedDrawnWidth < 0 ? 0 : d.plannedDrawnWidth;
         d.plannedTranslate = "translate(" + d.plannedDrawnX + "," + d.plannedDrawnY + ")";
 
         d.actualDrawnX = (actualX < 0 ? 0 : actualX);
-        d.actualDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight) + (gApp._rowHeight / 2)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
+        d.actualDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight) + (gApp._rowHeight / 2)) - gApp.rootHeight;
         d.actualDrawnWidth = actualE - d.actualDrawnX;
         d.actualDrawnWidth = d.actualDrawnWidth < 0 ? 0 : d.actualDrawnWidth;
         d.actualTranslate = "translate(" + d.actualDrawnX + "," + d.actualDrawnY + ")";
@@ -3270,13 +3376,14 @@ function where(left, op, right) {
 
     _initTextRowTranslate: function (d) {
         var svgHeight = gApp._getSVGHeight();
-        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - (gApp._shouldShowRoot() ? 0 : gApp._rowHeight);
+        d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - gApp.rootHeight;
         d.textDrawnX = 0;
         d.textTranslate = "translate(" + d.textDrawnX + "," + d.plannedDrawnY + ")";
     },
 
     _createSVGTree: function () {
         var symbolWidth = 20;
+        gApp.rootHeight = gApp._shouldShowRoot() ? 0 : gApp._rowHeight;
         gApp._nodeTree.sum(function () { return 1; });
         var partition = d3.partition();
         var nodetree = partition(gApp._nodeTree);
@@ -21024,7 +21131,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             Rally.launchApp('CustomAgile.apps.PortfolioItemTimeline.app', {
                 name:"Enhanced Portfolio Item Timeline",
                 parentRepos:"",
-                version:"0.3.6"
+                version:"0.3.7"
             });
 
         });
