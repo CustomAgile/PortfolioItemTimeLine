@@ -245,7 +245,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         Rally.data.wsapi.Proxy.superclass.timeout = 240000;
         Rally.data.wsapi.batch.Proxy.superclass.timeout = 240000;
         gApp.client = new CustomAgile.Client('', { project: gApp.getContext().getProjectRef(), workspace: this.getContext().getWorkspaceRef(), maxConcurrentRequests: 8 });
-        gApp.stores = [];
 
         let width = gApp.getEl().getWidth();
         let height = gApp.getEl().getHeight();
@@ -363,8 +362,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
 
         setTimeout(async function () {
+            gApp.loadingFailed = false;
             if (gApp.ancestorFilterPlugin._isSubscriber()) {
-                gApp.advFilters = await gApp.ancestorFilterPlugin.getMultiLevelFilters();
+                gApp.advFilters = await gApp.ancestorFilterPlugin.getMultiLevelFilters().catch((e) => {
+                    Rally.ui.notify.Notifier.showError({ message: (e.message || e) });
+                    gApp.loadingFailed = true;
+                });
             }
             await gApp._updatePiTypeList();
             await gApp._addSharedViewsCombo();
@@ -372,6 +375,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             gApp._updateFilterTabText();
             gApp._updateAncestorTabText();
             gApp.ready = true;
+            if (gApp.loadingFailed) {
+                gApp.setLoading(false);
+                return;
+            }
             gApp._refreshTimeline();
         }, 400);
     },
@@ -462,9 +469,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _refreshTimeline: async function () {
         // Lots of listeners and events. Lets ensure the timeline only loads once
         if (gApp.loadingTimeline || gApp.settingView || !gApp.ready) { return; }
+        gApp.loadingFailed = false;
         gApp._removeSVGTree();
         gApp._clearNodes();
-        gApp.stores = [];
 
         // Reset height so the loading mask shows properly
         var rs = gApp.down('#rootSurface');
@@ -633,7 +640,10 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             else { query = parentFilter; }
         }
         else {
-            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, false);
+            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, false).catch((e) => {
+                Rally.ui.notify.Notifier.showError({ message: (e.message || e) });
+                gApp.loadingFailed = true;
+            });
         }
 
         for (let i = 0; i < filters.length; i++) {
@@ -670,7 +680,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
                 if (parents.$hasMore) {
                     promises.push(new Promise(function (nextPageResolve, nextPageReject) {
-                        // console.log('Getting next page');
                         parents.$getNextPage().then((newResults) => {
                             gApp._getChildArtifacts(newResults, nextPageResolve, nextPageReject);
                         });
@@ -681,6 +690,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
                 if (type) {
                     let config = await gApp._buildConfig(type, parents);
+
+                    if (gApp.loadingFailed) {
+                        reject('Failed while fetching filter data');
+                        return;
+                    }
+
                     promises.push(new Promise(function (newResolve, newReject) {
                         try {
                             gApp.client.query(type.get('TypePath'), config).then((results) => {
@@ -712,6 +727,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
 
             var config = await gApp._buildConfig(topType);
+
+            if (gApp.loadingFailed) {
+                reject('Failed while fetching filter data');
+                return;
+            }
 
             if (mustGetParents) {
                 if (highestFilteredOrd === 0) {
@@ -1777,6 +1797,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _nodeMouseOver: function (node) {
         return;
+
+        // TODO - Convert cards to work with custom agile toolkit records
+
         // if (!(node.data.record.ObjectID)) {
         //     //Only exists on real items, so do something for the 'unknown' item
         //     return;
@@ -2349,7 +2372,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _fetchRecordByRef: function (type, callback) {
         var oid = Rally.util.Ref.getOidFromRef(type.pi);
-        gApp.stores.push(Ext.create('Rally.data.wsapi.Store', {
+        Ext.create('Rally.data.wsapi.Store', {
             model: type.piTypePath,
             autoLoad: true,
             pageSize: 1,
@@ -2361,7 +2384,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }],
             context: { project: null },
             listeners: { load: callback }
-        }));
+        });
     },
 
     /*    Routines to manipulate the types    */

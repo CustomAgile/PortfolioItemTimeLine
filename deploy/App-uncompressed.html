@@ -3,7 +3,7 @@
 <head>
     <title>Enhanced Portfolio Item Timeline</title>
     <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
-    <!--  Build Date: Thu Sep 05 2019 14:38:18 GMT-0700 (Pacific Daylight Time) -->
+    <!--  Build Date: Tue Sep 17 2019 15:48:58 GMT-0700 (Pacific Daylight Time) -->
     <!--  Version: "0.3.8"-->
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
@@ -350,80 +350,21 @@
         let keys = Object.keys(multiLevelFilters);
 
         for (let i = 0; i < keys.length; i++) {
-            let key = keys[i];
-            let val = multiLevelFilters[key];
+            let currentType = keys[i];
+            let currentFilters = multiLevelFilters[currentType];
 
-            if (val.length) {
+            if (currentFilters.length) {
                 // If scoping all projects, filter releases by name instead of value
-                await this._convertReleaseFilters(val);
+                await this._convertReleaseFilters(currentFilters);
 
-                if (modelName === key.toLowerCase()) {
-                    filters = filters.concat(val);
+                // If we're at the given level, just add the filters
+                if (modelName === currentType.toLowerCase()) {
+                    filters = filters.concat(currentFilters);
                 }
+                // If we're at a level above the given level, convert filters to fit given level
                 else {
-                    let pisAbove = this._piTypeAncestors(modelName, key);
-
-                    if (pisAbove !== null) {
-                        let property = this._propertyPrefix(modelName, pisAbove);
-                        if (property) {
-                            let currentLevelFilters = [];
-                            let currentLevelFiltersWithoutParentPrefix = [];
-                            let hasCustomFieldFilters = false;
-                            _.each(val, function (filter) {
-                                // Rally has a hard time filtering on custom dropdown fields on parents so
-                                // we check to see if any are applied
-                                if (filter.property.indexOf('c_') !== -1 && typeof filter.value === 'string') {
-                                    hasCustomFieldFilters = true;
-                                }
-
-                                // List of filters if custom field filters exist
-                                currentLevelFiltersWithoutParentPrefix.push(new Rally.data.wsapi.Filter({
-                                    property: filter.property,
-                                    operator: filter.operator,
-                                    value: filter.value
-                                }));
-
-                                // List of filters if no custom field filters exist
-                                currentLevelFilters.push(new Rally.data.wsapi.Filter({
-                                    property: `${property}.${filter.property}`,
-                                    operator: filter.operator,
-                                    value: filter.value
-                                }));
-                            }.bind(this));
-
-                            // If filters on custom fields exist, lets get a list of IDs at that level and use those IDs as our filter
-                            if (hasCustomFieldFilters) {
-                                let parentIDs = [];
-                                try {
-                                    parentIDs = await new Promise(function (resolve) { this._getFilteredIds(currentLevelFiltersWithoutParentPrefix, key, resolve); }.bind(this));
-                                    if (parentIDs.length) {
-                                        filters.push(new Rally.data.wsapi.Filter({
-                                            property: property + '.ObjectID',
-                                            operator: 'in',
-                                            value: _.map(parentIDs, function (id) { return id.get('ObjectID'); })
-                                        }));
-                                    }
-                                    else {
-                                        filters.push(new Rally.data.wsapi.Filter({
-                                            property: property + '.ObjectID',
-                                            operator: '=',
-                                            value: 0
-                                        }));
-                                    }
-                                }
-                                catch (e) {
-                                    return [new Rally.data.wsapi.Filter({
-                                        property: property + '.ObjectID',
-                                        operator: '=',
-                                        value: 0
-                                    })];
-                                }
-                            }
-                            else {
-                                filters = filters.concat(currentLevelFilters);
-                            }
-                        }
-                    }
+                    let parentFilters = await this._getParentFilters(modelName, currentType, currentFilters);
+                    filters = filters.concat(parentFilters);
                 }
             }
         }
@@ -431,7 +372,7 @@
         // If building a hierarchy from top level down, we don't need to include filters
         // below the given type (e.g. a timeline app). Otherwise if being used for an app
         // that only displays one PI type, we need to include those lower filters
-        if (includeFiltersBelowType) {
+        if (includeFiltersBelowType && Ext.String.startsWith(type.toLowerCase(), 'portfolioitem')) {
             let childFilter = await this._getChildFiltersForType(type, multiLevelFilters);
             if (childFilter) {
                 filters.push(childFilter);
@@ -478,22 +419,43 @@
         return filters;
     },
 
+    // Starting at the lowest PI type, get a list of IDs that fit the given filter. 
+    // Traverse up the PI hierarchy until reaching the given type and return a list of IDs
+    // for that type that fit all filters from below
+    // Returns an array of object IDs
     _getChildFiltersForType: async function (type, filters) {
         let idFilter;
         // PI types are in order lowest to highest
         for (let i = 0; i < this.portfolioItemTypes.length; i++) {
             let currentType = this.portfolioItemTypes[i].get('TypePath');
+            let currentFilter = filters[currentType];
             if (currentType.toLowerCase() === type.toLowerCase()) {
                 break;
             }
-            if ((filters[currentType] && filters[currentType].length) || idFilter) {
-                if (!filters[currentType]) {
-                    filters[currentType] = [];
+            if ((currentFilter && currentFilter.length) || idFilter) {
+                if (!currentFilter) {
+                    currentFilter = [];
                 }
                 if (idFilter) {
-                    filters[currentType].push(idFilter);
+                    currentFilter.push(idFilter);
                 }
-                let records = await new Promise(function (resolve) { this._getFilteredIds(filters[currentType], currentType, resolve); }.bind(this));
+
+                // To reduce the number of results returned, we include filters of higher level PI types
+                for (let j = i + 1; j < this.portfolioItemTypes.length; j++) {
+                    let parentType = this.portfolioItemTypes[j].get('TypePath');
+                    let parentFilters = await this._getParentFilters(currentType, parentType, filters[parentType]);
+                    currentFilter = currentFilter.concat(parentFilters);
+                }
+
+                let ancestor = this.getAncestorFilterForType(type);
+                if (ancestor && ancestor.value) {
+                    currentFilter.push(ancestor);
+                }
+
+                let records = await new Promise(function (resolve, reject) { this._getFilteredIds(currentFilter, currentType, resolve, reject); }.bind(this)).catch((e) => {
+                    throw new Error(e);
+                });
+
                 if (records.length) {
                     let parents = _.map(records, function (id) { return (id.get('Parent') && id.get('Parent').ObjectID) || 0; });
                     idFilter = new Rally.data.wsapi.Filter({
@@ -514,11 +476,77 @@
         return idFilter;
     },
 
-    // removeInvalidFilters: function () {
-    //     _.each(this.filterControls, function (filterControl) {
-    //         filterControl.inlineFilterButton._removeInvalidFilters();
-    //     }, this);
-    // },
+    // Given a type and a parent type and array of parent filters, convert the filters
+    // to apply to the given type
+    _getParentFilters: async function (type, parentType, parentFilters) {
+        let pisAbove = this._piTypeAncestors(type, parentType);
+
+        if (pisAbove !== null) {
+            let parentProperty = this._propertyPrefix(type, pisAbove);
+            if (parentProperty) {
+                let currentLevelFilters = [];
+                let hasCustomFieldFilters = this._hasCustomFilters(parentFilters);
+                _.each(parentFilters, function (filter) {
+                    let prop = filter.property;
+                    if (!hasCustomFieldFilters) {
+                        prop = `${parentProperty}.${prop}`;
+                    }
+
+                    currentLevelFilters.push(new Rally.data.wsapi.Filter({
+                        property: prop,
+                        operator: filter.operator,
+                        value: filter.value
+                    }));
+                }.bind(this));
+
+                // If filters on custom fields exist, lets get a list of IDs at that level and use those IDs as our filter
+                if (hasCustomFieldFilters) {
+                    let parentIDs = [];
+                    try {
+                        parentIDs = await new Promise(function (resolve, reject) { this._getFilteredIds(currentLevelFilters, parentType, resolve, reject); }.bind(this)).catch((e) => {
+                            throw new Error(e);
+                        });
+                        if (parentIDs.length) {
+                            return new Rally.data.wsapi.Filter({
+                                property: parentProperty + '.ObjectID',
+                                operator: 'in',
+                                value: _.map(parentIDs, function (id) { return id.get('ObjectID'); })
+                            });
+                        }
+                        else {
+                            return new Rally.data.wsapi.Filter({
+                                property: parentProperty + '.ObjectID',
+                                operator: '=',
+                                value: 0
+                            });
+                        }
+                    }
+                    catch (e) {
+                        return [new Rally.data.wsapi.Filter({
+                            property: parentProperty + '.ObjectID',
+                            operator: '=',
+                            value: 0
+                        })];
+                    }
+                }
+                else {
+                    return currentLevelFilters;
+                }
+            }
+        }
+        return [];
+    },
+
+    _hasCustomFilters: function (filters) {
+        for (let filter of filters) {
+            // Rally has a hard time filtering on custom dropdown fields on parents (probably
+            // not indexed) so we check to see if any are applied
+            if (filter.property.indexOf('c_') !== -1 && typeof filter.value === 'string') {
+                return true;
+            }
+        }
+        return false;
+    },
 
     // Takes an array of filters. If scoping across all projects, we need to update any release
     // filters to filter on the release name rather than the release value
@@ -613,10 +641,15 @@
     },
 
     // Returns an array of records fitting the given filters
-    _getFilteredIds: function (filters, model, resolve) {
+    _getFilteredIds: function (filters, model, resolve, reject) {
         let dataContext = Rally.getApp().getContext().getDataContext();
         if (this.getIgnoreProjectScope()) {
             dataContext.project = null;
+        }
+
+        let ancestor = this.getAncestorFilterForType(model);
+        if (ancestor && ancestor.value) {
+            filters.push(ancestor);
         }
 
         let store = Ext.create('Rally.data.wsapi.Store', {
@@ -625,7 +658,8 @@
             filters,
             model,
             fetch: ['ObjectID', 'Parent'],
-            limit: Infinity
+            limit: Infinity,
+            enablePostGet: true
         });
 
         store.load().then({
@@ -634,8 +668,10 @@
                 resolve(records);
             },
             failure: function () {
-                Rally.ui.notify.Notifier.showError({ message: 'Multi-level filter failed while filtering out items below selected portfolio item type. Result set was probably too large.' });
-                resolve([]);
+                //Rally.ui.notify.Notifier.showError({ message: 'Multi-level filter failed while filtering out items above or below selected portfolio item type. Result set was probably too large.' });
+                reject('Multi-level filter failed while filtering out items above or below selected portfolio item type. Result set was probably too large.');
+                //resolve([]);
+                // reject('Multi-level filter failed while filtering out items above or below selected portfolio item type. Result set was probably too large.'); // TODO REJECT!!!!!
             }
         });
     },
@@ -703,7 +739,7 @@
                     var selectedPi = this.piSelector.getValue();
                     _.merge(result, {
                         piTypePath: selectedPiTypePath,
-                        isPiSelected: !!selectedRecord,
+                        isPiSelected: !!selectedPi,
                         pi: selectedPi,
                         piRecord: selectedRecord
                     });
@@ -1108,8 +1144,9 @@
                         project: null
                     }
                 },
-                queryDelay: 7000,
-                autoSelectCurrentItem: false,
+                queryDelay: 2000,
+                typeAhead: false,
+                validateOnChange: false,
                 stateful: true,
                 stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piSelector'),
                 stateEvents: ['select'],
@@ -1208,7 +1245,7 @@
         else if (typeName === 'defect') {
             property = 'Requirement.' + piTypesAbove[0].get('Name');
         }
-        else if (Ext.String.startsWith(typeName, 'portfolioitem')) {
+        else if (Ext.String.startsWith(typeName.toLowerCase(), 'portfolioitem')) {
             property = 'Parent';
         }
 
@@ -1240,7 +1277,7 @@
             });
             result = this.portfolioItemTypes.slice(0, selectedPiTypeIndex + 1);
         }
-        else if (Ext.String.startsWith(modelName, 'portfolioitem')) {
+        else if (Ext.String.startsWith(modelName.toLowerCase(), 'portfolioitem')) {
             modelNamePiTypeIndex = _.findIndex(this.portfolioItemTypes, function (piType) {
                 return piType.get('TypePath').toLowerCase() === modelName.toLowerCase();
             });
@@ -2183,7 +2220,6 @@ function where(left, op, right) {
         Rally.data.wsapi.Proxy.superclass.timeout = 240000;
         Rally.data.wsapi.batch.Proxy.superclass.timeout = 240000;
         gApp.client = new CustomAgile.Client('', { project: gApp.getContext().getProjectRef(), workspace: this.getContext().getWorkspaceRef(), maxConcurrentRequests: 8 });
-        gApp.stores = [];
 
         let width = gApp.getEl().getWidth();
         let height = gApp.getEl().getHeight();
@@ -2301,8 +2337,12 @@ function where(left, op, right) {
         });
 
         setTimeout(async function () {
+            gApp.loadingFailed = false;
             if (gApp.ancestorFilterPlugin._isSubscriber()) {
-                gApp.advFilters = await gApp.ancestorFilterPlugin.getMultiLevelFilters();
+                gApp.advFilters = await gApp.ancestorFilterPlugin.getMultiLevelFilters().catch((e) => {
+                    Rally.ui.notify.Notifier.showError({ message: (e.message || e) });
+                    gApp.loadingFailed = true;
+                });
             }
             await gApp._updatePiTypeList();
             await gApp._addSharedViewsCombo();
@@ -2310,6 +2350,10 @@ function where(left, op, right) {
             gApp._updateFilterTabText();
             gApp._updateAncestorTabText();
             gApp.ready = true;
+            if (gApp.loadingFailed) {
+                gApp.setLoading(false);
+                return;
+            }
             gApp._refreshTimeline();
         }, 400);
     },
@@ -2400,9 +2444,9 @@ function where(left, op, right) {
     _refreshTimeline: async function () {
         // Lots of listeners and events. Lets ensure the timeline only loads once
         if (gApp.loadingTimeline || gApp.settingView || !gApp.ready) { return; }
+        gApp.loadingFailed = false;
         gApp._removeSVGTree();
         gApp._clearNodes();
-        gApp.stores = [];
 
         // Reset height so the loading mask shows properly
         var rs = gApp.down('#rootSurface');
@@ -2571,7 +2615,10 @@ function where(left, op, right) {
             else { query = parentFilter; }
         }
         else {
-            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, false);
+            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, false).catch((e) => {
+                Rally.ui.notify.Notifier.showError({ message: (e.message || e) });
+                gApp.loadingFailed = true;
+            });
         }
 
         for (let i = 0; i < filters.length; i++) {
@@ -2608,7 +2655,6 @@ function where(left, op, right) {
 
                 if (parents.$hasMore) {
                     promises.push(new Promise(function (nextPageResolve, nextPageReject) {
-                        // console.log('Getting next page');
                         parents.$getNextPage().then((newResults) => {
                             gApp._getChildArtifacts(newResults, nextPageResolve, nextPageReject);
                         });
@@ -2619,6 +2665,12 @@ function where(left, op, right) {
 
                 if (type) {
                     let config = await gApp._buildConfig(type, parents);
+
+                    if (gApp.loadingFailed) {
+                        reject('Failed while fetching filter data');
+                        return;
+                    }
+
                     promises.push(new Promise(function (newResolve, newReject) {
                         try {
                             gApp.client.query(type.get('TypePath'), config).then((results) => {
@@ -2650,6 +2702,11 @@ function where(left, op, right) {
             }
 
             var config = await gApp._buildConfig(topType);
+
+            if (gApp.loadingFailed) {
+                reject('Failed while fetching filter data');
+                return;
+            }
 
             if (mustGetParents) {
                 if (highestFilteredOrd === 0) {
@@ -3715,6 +3772,9 @@ function where(left, op, right) {
 
     _nodeMouseOver: function (node) {
         return;
+
+        // TODO - Convert cards to work with custom agile toolkit records
+
         // if (!(node.data.record.ObjectID)) {
         //     //Only exists on real items, so do something for the 'unknown' item
         //     return;
@@ -4287,7 +4347,7 @@ function where(left, op, right) {
 
     _fetchRecordByRef: function (type, callback) {
         var oid = Rally.util.Ref.getOidFromRef(type.pi);
-        gApp.stores.push(Ext.create('Rally.data.wsapi.Store', {
+        Ext.create('Rally.data.wsapi.Store', {
             model: type.piTypePath,
             autoLoad: true,
             pageSize: 1,
@@ -4299,7 +4359,7 @@ function where(left, op, right) {
             }],
             context: { project: null },
             listeners: { load: callback }
-        }));
+        });
     },
 
     /*    Routines to manipulate the types    */
