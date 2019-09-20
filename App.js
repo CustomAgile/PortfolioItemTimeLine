@@ -661,6 +661,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             projectScopeDown: context.getProjectScopeDown(),
             enablePostGet: true,
             query: query ? query.toString() : "",
+            order: 'DragAndDropRank',
             pagesize,
             limit,
             fetch: gApp.STORE_FETCH_FIELD_LIST
