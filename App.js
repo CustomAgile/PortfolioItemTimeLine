@@ -311,7 +311,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             {
                 xtype: 'tabpanel',
                 cls: 'blue-tabs',
-                activeTab: 1,
+                activeTab: 0,
                 plain: true,
                 hideMode: 'offsets',
                 autoRender: true,

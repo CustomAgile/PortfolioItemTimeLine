@@ -66,6 +66,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                         text: 'ZOOM',
                         style: this.fontStyle,
                         width: 50,
+                        minHeight: 15,
                         margin: '0 5 0 0',
                         itemId: 'zoomLabel'
                     },
@@ -339,6 +340,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                 text: 'EXPORT',
                 style: this.fontStyle,
                 width: 50,
+                minHeight: 15,
                 margin: 0,
                 itemId: 'exportLabel'
             },
