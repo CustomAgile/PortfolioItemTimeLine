@@ -1877,8 +1877,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.advFilters = filters;
         gApp._updateFilterTabText();
 
-        // If user clears filters or is a subscriber, update timeline, otherwise store the added filter
-        if (!gApp._hasFilters() || gApp.ancestorFilterPlugin._isSubscriber()) {
+        // If user is a subscriber, update timeline, otherwise store the added filter
+        if (gApp.ancestorFilterPlugin._isSubscriber()) {
             gApp._applyFilters(gApp.down('#applyFiltersBtn'));
         }
         else {

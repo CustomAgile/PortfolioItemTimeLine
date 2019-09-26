@@ -62,8 +62,8 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                 },
                 items: [
                     {
-                        xtype: 'text',
-                        text: 'ZOOM',
+                        xtype: 'component',
+                        html: 'ZOOM',
                         style: this.fontStyle,
                         width: 50,
                         minHeight: 15,
@@ -336,8 +336,8 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                 }]
             },
             {
-                xtype: 'text',
-                text: 'EXPORT',
+                xtype: 'component',
+                html: 'EXPORT',
                 style: this.fontStyle,
                 width: 50,
                 minHeight: 15,
