@@ -46,6 +46,14 @@
   fill: #f00;
 }
 
+.dependency-circle:hover {
+  cursor: pointer;
+}
+
+path {
+  stroke-opacity: 0.4;
+}
+
 path.data--errors {
   fill: none;
 }

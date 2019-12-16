@@ -2,6 +2,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     extend: 'Rally.app.TimeboxScopedApp',
     settingsScope: 'project',
     componentCls: 'app',
+
     config: {
         tlAfter: 90,  // Default days past today for viewport end
         tlBack: 120, // Default days before today for viewport start
@@ -156,6 +157,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         'Owner',
         'PercentDoneByStoryCount',
         'PercentDoneByStoryPlanEstimate',
+        'Predecessors',
+        'Successors',
         'PredecessorsAndSuccessors',
         'State',
         'Value',
@@ -176,6 +179,9 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         'PercentDoneByStoryPlanEstimate',
         'PlannedStartDate',
         'PlannedEndDate',
+        'Predecessors',
+        'Successors',
+        'PredecessorsAndSuccessors',
         'ActualStartDate',
         'ActualEndDate',
         'State'
@@ -240,6 +246,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _nodeTree: null,
 
     launch: function () {
+        // gApp.stateId = gApp.getContext().getScopedStateId('PortfolioItemTimeline');
         gApp.ready = false;
         gApp.loadingTimeline = false;
         Rally.data.wsapi.Proxy.superclass.timeout = 240000;
@@ -364,10 +371,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         setTimeout(async function () {
             gApp.loadingFailed = false;
             if (gApp.ancestorFilterPlugin._isSubscriber()) {
-                gApp.advFilters = await gApp.ancestorFilterPlugin.getMultiLevelFilters().catch((e) => {
-                    Rally.ui.notify.Notifier.showError({ message: (e.message || e) });
-                    gApp.loadingFailed = true;
-                });
+                gApp.advFilters = gApp.ancestorFilterPlugin.getMultiLevelFilters();
             }
             await gApp._updatePiTypeList();
             await gApp._addSharedViewsCombo();
@@ -431,7 +435,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             labelStyle: 'font-size: 14px',
             ownerLabel: '',
             ownerLabelWidth: 0,
-            whiteListFields: ['Milestones', 'Tags'],
+            whiteListFields: [
+                'Tags',
+                'Milestones',
+                'c_EnterpriseApprovalEA'
+            ],
             settingsConfig: {
                 labelWidth: 150,
                 padding: 10
@@ -546,7 +554,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             },
             // REJECT
             function (error) {
-                console.log(error);
+                console.warn(error);
                 if (typeof error === 'string' && error.indexOf('Canceled Loading Timeline') !== -1) { }
                 else {
                     gApp._showError(gApp._parseError(error, 'Failed while fetching portfolio items. Please reload and try again.'));
@@ -646,7 +654,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
         }
 
-        for (let i = 0; i < filters.length; i++) {
+        for (let i = 0;i < filters.length;i++) {
             if (query) { query = query.and(filters[i]); }
             else { query = filters[i]; }
         }
@@ -805,12 +813,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             }
 
                             // Not all artifacts will have parents all the way to the top level and must be removed
-                            for (let pass = 0; pass < filterPasses; pass++) {
-                                for (let i = 0; i < allParentRecords.length; i++) {
+                            for (let pass = 0;pass < filterPasses;pass++) {
+                                for (let i = 0;i < allParentRecords.length;i++) {
                                     let parentID = allParentRecords[i].Parent && allParentRecords[i].Parent.ObjectID;
                                     let toDelete = true;
                                     if (parentID) {
-                                        for (let j = 0; j < allParentRecords.length; j++) {
+                                        for (let j = 0;j < allParentRecords.length;j++) {
                                             if (allParentRecords[j].ObjectID === parentID) {
                                                 toDelete = false;
                                                 break;
@@ -824,11 +832,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             allParentRecords = _.filter(allParentRecords, (record) => { return !record.toDelete; });
 
                             // Now filter original result set
-                            for (let i = 0; i < results.length; i++) {
+                            for (let i = 0;i < results.length;i++) {
                                 let parentID = results[i].Parent && results[i].Parent.ObjectID;
                                 let toDelete = true;
                                 if (parentID) {
-                                    for (let j = 0; j < allParentRecords.length; j++) {
+                                    for (let j = 0;j < allParentRecords.length;j++) {
                                         if (allParentRecords[j].ObjectID === parentID) {
                                             toDelete = false;
                                             break;
@@ -877,8 +885,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _recalculateTree: function () {
         if (gApp._nodes.length === 0) { return; }
         gApp._rowHeight = gApp.getSetting('lineSize') || 40;
-
-        var nodetree = gApp._createNodeTree(gApp._nodes);
+        var nodetree = gApp._createNodeTree();
         if (!nodetree) { return; }
 
         gApp._setSVGDimensions(nodetree);
@@ -1133,6 +1140,91 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 if (!d.expanded) { gApp._collapseAll(); } else { gApp._expandAll(); }
             });
 
+        d3.selectAll('.dependency-item').remove();
+
+        if (gApp.down('#showDependenciesCheckbox').getValue()) {
+            gApp._nodeTree.each(function (d) {
+                // Now add the dependencies lines
+                if (!d.data.record.ObjectID) { return; }
+                var deps = d.data.record.Successors;
+                if (deps && deps.Count) {
+                    gApp._getSuccessors(d.data.record).then(
+                        {
+                            success: function (succs) {
+                                //Draw a circle on the end of the first one and make it flash if we can't find the end one
+                                _.each(succs, function (succ) {
+                                    var e = gApp._findTreeNode(gApp._getNodeTreeRecordId(succ));
+                                    var zClass = 'dependency-item';
+                                    var r = 3;
+                                    var x0;
+                                    var y0;
+                                    var zoomTree = d3.select('#zoomTree');
+                                    var source = d3.select('#rect-' + d.data.Name);
+
+                                    if (!e) {
+                                        zClass += ' textBlink';
+                                    } else {
+                                        if (gApp._sequenceError(d, e)) {
+                                            zClass += ' data--errors';
+                                        }
+                                        else {
+                                            zClass += ' no--errors';
+                                        }
+                                    }
+
+                                    if (source.node()) {
+                                        x0 = source.node().getCTM().e + source.node().getBBox().width - gApp._rowHeight;
+                                        y0 = source.node().getCTM().f - topPadding + 5; // (gApp._rowHeight / 2) - gApp._rowHeight + 3 +
+
+                                        if (zoomTree.select('#circle-' + d.data.Name).empty()) {
+                                            zoomTree.append('circle')
+                                                .attr('cx', x0)
+                                                .attr('cy', y0)
+                                                .attr('r', r)
+                                                .attr('id', 'circle-' + d.data.Name)
+                                                .on('click', function (a, idx, arr) {
+                                                    gApp._createDepsPopover(d, arr[idx]);
+                                                })    //Default to successors
+                                                .attr('class', zClass + ' dependency-circle');
+                                        }
+                                    }
+
+                                    if (e) {
+                                        //Stuff that needs endpoint
+                                        var target = d3.select('#rect-' + e.data.Name);
+
+                                        if (target.node()) {
+                                            var x1 = target.node().getCTM().e - gApp._rowHeight;
+                                            var y1 = target.node().getCTM().f - topPadding + 5; // - (gApp._rowHeight / 2) - gApp._rowHeight + 3;
+
+                                            zoomTree.append('circle')
+                                                .attr('cx', x1)
+                                                .attr('cy', y1)
+                                                .attr('r', 3)
+                                                .on('click', function (a, idx, arr) { gApp._createDepsPopover(e, arr[idx]); })    //Default to successors
+                                                .attr('class', zClass + ' dependency-circle');
+
+                                            zClass += (zClass.length ? ' ' : '') + 'dashed' + d.data.record.PortfolioItemType.Ordinal.toString();
+
+                                            if (x0) {
+                                                zoomTree.append('path')
+                                                    .attr('d',
+                                                        'M' + (x0 + 1.5) + ',' + y0 +
+                                                        'C' + (x0 + 150) + ',' + (y0 + (y1 - y0) / 8) +
+                                                        ' ' + (x1 - 150) + ',' + (y1 - (y1 - y0) / 8) +
+                                                        ' ' + (x1 - 1.5) + ',' + y1)
+                                                    .attr('class', zClass);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    );
+                }
+            });
+        }
+
         gApp._timelineScrolled({ currentTarget: { scrollLeft: gApp.currentScrollX, scrollTop: document.getElementById('timelineContainer').scrollTop } });
     },
 
@@ -1360,7 +1452,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
             gApp._redrawTree();
         } else {
-            for (let i = 0; i < gApp._getTopLevelTypeOrdinal(); i++) {
+            for (let i = 0;i < gApp._getTopLevelTypeOrdinal();i++) {
                 d3.selectAll('.collapse-icon').dispatch('expandAll');
                 gApp._redrawTree();
             }
@@ -1493,13 +1585,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         d.plannedDrawnX = plannedX;
         d.plannedDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight)) - gApp.rootHeight;
         d.plannedDrawnWidth = plannedE - d.plannedDrawnX;
-        d.plannedDrawnWidth = d.plannedDrawnWidth < 0 ? 0 : d.plannedDrawnWidth;
+        d.plannedDrawnWidth = d.plannedDrawnWidth < 1 ? 1 : d.plannedDrawnWidth;
         d.plannedTranslate = "translate(" + d.plannedDrawnX + "," + d.plannedDrawnY + ")";
 
-        d.actualDrawnX = (actualX < 0 ? 0 : actualX);
+        d.actualDrawnX = (actualX < 1 ? 1 : actualX);
         d.actualDrawnY = ((d.x0 * svgHeight) + (d.depth * gApp._rowHeight) + (gApp._rowHeight / 2)) - gApp.rootHeight;
         d.actualDrawnWidth = actualE - d.actualDrawnX;
-        d.actualDrawnWidth = d.actualDrawnWidth < 0 ? 0 : d.actualDrawnWidth;
+        d.actualDrawnWidth = d.actualDrawnWidth < 1 ? 1 : d.actualDrawnWidth;
         d.actualTranslate = "translate(" + d.actualDrawnX + "," + d.actualDrawnY + ")";
     },
 
@@ -1513,10 +1605,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _createSVGTree: function () {
         var symbolWidth = 20;
         gApp.rootHeight = gApp._shouldShowRoot() ? 0 : gApp._rowHeight;
-        gApp._nodeTree.sum(function () { return 1; });
-        var partition = d3.partition();
-        var nodetree = partition(gApp._nodeTree);
-
+        var nodetree = gApp._repartitionNodeTree(); // gApp._nodeTree || gApp._createNodeTree();
         gApp._setSVGDimensions(nodetree);
         gApp._initializeSVG();
 
@@ -1659,105 +1748,32 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             .on('collapseAll', function (d) { gApp._collapse(d); })
             .on('expandAll', function (d) { gApp._expand(d); });
 
-        if (gApp.down('#showDependenciesCheckbox').getValue()) {
-            nodetree.each(function (d) {
-                // Now add the dependencies lines
-                if (!d.data.record.ObjectID) { return; }
-                var deps = d.data.record.Successors;
-                if (deps && deps.Count) {
-                    gApp._getSuccessors(d.data.record).then(
-                        {
-                            success: function (succs) {
-                                //Draw a circle on the end of the first one and make it flash if I can't find the end one
-                                _.each(succs, function (succ) {
-                                    var e = gApp._findTreeNode(gApp._getNodeTreeRecordId(succ));
-                                    var zClass = '';
-                                    var zoomTree = d3.select('#zoomTree');
-                                    // Stuff without end point // TODO source.node is sometimes null
-                                    var source = d3.select('#rect-' + d.data.Name);
-                                    var x0 = source.node().getCTM().e + source.node().getBBox().width - gApp._rowHeight;
-                                    var y0 = source.node().getCTM().f - gApp._rowHeight / 4;
-
-                                    if (!e) {
-                                        zClass += 'textBlink';
-                                    } else {
-                                        if (gApp._sequenceError(d, e)) {
-                                            zClass += (zClass.length ? ' ' : '') + 'data--errors';
-                                        }
-                                        else {
-                                            zClass += (zClass.length ? ' ' : '') + 'no--errors';
-                                        }
-                                    }
-
-                                    if (zoomTree.select('#circle-' + d.data.Name).empty()) {
-                                        zoomTree.append('circle')
-                                            .attr('cx', x0)
-                                            .attr('cy', y0)
-                                            .attr('r', 3)
-                                            .attr('id', 'circle-' + d.data.Name)
-                                            .on('mouseover', function (a, idx, arr) {    //'a' refers to the wrong thing!
-                                                gApp._createDepsPopover(d, arr[idx], 1);
-                                            })    //Default to successors
-                                            .attr('class', zClass);
-                                    }
-
-                                    if (!e) {
-                                        return;
-                                    }
-                                    //Stuff that needs endpoint
-                                    var target = d3.select('#rect-' + e.data.Name);
-                                    var x1 = target.node().getCTM().e - gApp._rowHeight;
-                                    var y1 = target.node().getCTM().f - (gApp._rowHeight / 4);
-
-                                    zoomTree.append('circle')
-                                        .attr('cx', x1)
-                                        .attr('cy', y1)
-                                        .attr('r', 3)
-                                        .on('mouseover', function (a, idx, arr) { gApp._createDepsPopover(e, arr[idx], 0); })    //Default to successors
-                                        .attr('class', zClass);
-
-                                    zClass += (zClass.length ? ' ' : '') + 'dashed' + d.data.record.PortfolioItemType.Ordinal.toString();
-
-                                    if (d.data.record.PortfolioItemType.Ordinal === 0) {
-                                        zoomTree.append('path')
-                                            .attr('d',
-                                                'M' + x0 + ',' + y0 +
-                                                'C' + (x0 + 150) + ',' + (y0 + (y1 - y0) / 8) +
-                                                ' ' + (x1 - 150) + ',' + (y1 - (y1 - y0) / 8) +
-                                                ' ' + x1 + ',' + y1)
-                                            .attr('class', zClass);
-                                    }
-                                });
-                            }
-                        }
-                    );
-                }
-            });
-        }
     },
 
-    _createDepsPopover: function (node, circ, tabOverride) {
-        //Create a zero size container right where the blob is and attach the 
-        //popover to that
-        var panel = Ext.create('Rally.ui.popover.DependenciesPopover',
-            {
-                record: node.data.record,
-                target: circ,
-                autoShow: false,
-                showChevron: false,
-                listeners: {
-                    show: function () {
-                        var activeTab = (node.data.record.PredecessorsAndSuccessors.Predecessors === 0) &&
-                            (node.data.record.PredecessorsAndSuccessors.Successors > 0);
-                        panel._getTabPanel().setActiveTab((tabOverride !== undefined) ? tabOverride : (activeTab ? 1 : 0));
-                        panel.el.setLeftTop(parseInt(circ.getBBox().x + circ.getBBox().width + gApp._rowHeight),
-                            parseInt(circ.getBBox().y + (gApp._rowHeight / 2))
-                        );
-                    }
-                }
+    _createDepsPopover: async function (node, circ) {
+        // With the record returned via the toolkit, we can't successfully use the Rally Popover component
+        // so easiest option is to first fetch the record via the Rally SDK
+        let record = await this._fetchRecordById(node.data.record._type, node.data.record.ObjectID);
+
+        if (record) {
+            if (!record.data.PredecessorsAndSuccessors) {
+                record.data.PredecessorsAndSuccessors = {
+                    Predecessors: record.data.Predecessors.Count,
+                    Successors: record.data.Successors.Count,
+                    Count: record.data.Predecessors.Count + record.data.Successors.Count
+                };
             }
-        );
-        panel.show();
+
+            var panel = Ext.create('Rally.ui.popover.DependenciesPopover',
+                {
+                    record,
+                    target: circ,
+                    autoShow: false,
+                    showChevron: false
+                }
+            );
+            panel.show();
+        }
     },
 
     _checkSchedule: function (d, start, end) {
@@ -1778,17 +1794,25 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _getSuccessors: function (record) {
         var deferred = Ext.create('Deft.Deferred');
-        var config = {
-            fetch: gApp.STORE_FETCH_FIELD_LIST,
-            callback: function (records, operation, success) {
-                if (success) {
-                    deferred.resolve(records);
+
+        Ext.Ajax.request({
+            url: `${record.Successors._ref}?fetch=${gApp.STORE_FETCH_FIELD_LIST.join(',')}`,
+            success(response) {
+                if (response && response.responseText) {
+                    let obj = Ext.JSON.decode(response.responseText);
+                    // debugger;
+                    if (obj && obj.QueryResult && obj.QueryResult.Results) {
+                        deferred.resolve(obj.QueryResult.Results);
+                    }
+                    else {
+                        deferred.resolve([]);
+                    }
                 } else {
-                    deferred.reject(operation);
+                    deferred.resolve([]);
                 }
             }
-        };
-        record.getCollection('Successors').load(config);
+        });
+
         return deferred.promise;
     },
 
@@ -2388,6 +2412,27 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         });
     },
 
+    _fetchRecordById: async function (type, id) {
+        // var deferred = Ext.create('Deft.Deferred');
+        let store = Ext.create('Rally.data.wsapi.Store', {
+            model: type,
+            autoLoad: false,
+            pageSize: 1,
+            fetch: gApp.STORE_FETCH_FIELD_LIST,
+            filters: [{
+                property: 'ObjectID',
+                operator: '=',
+                value: id
+            }],
+            context: { project: null },
+        });
+
+        let records = await store.load();
+
+        return records && records.length ? records[0] : null;
+        // return deferred.promise;
+    },
+
     /*    Routines to manipulate the types    */
 
     _findTypeByOrdinal: function (ord) {
@@ -2419,7 +2464,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _findChildType: function (record) {
         var ord = null;
-        for (var i = 0; i < gApp._typeStore.length; i++) {
+        for (var i = 0;i < gApp._typeStore.length;i++) {
             if (record._type.toLowerCase() === gApp._typeStore[i].get('TypePath').toLowerCase()) {
                 ord = gApp._typeStore[i].get('Ordinal');
                 ord--;
@@ -2556,14 +2601,28 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             (nodes);
     },
 
-    _createNodeTree: function (nodes) {
+    _createNodeTree: function () {
         try {
-            gApp._nodeTree = gApp._stratifyNodeTree(nodes).sum(function () { return 1; });
+            gApp._nodeTree = gApp._stratifyNodeTree(gApp._nodes).sum(function () { return 1; });
+            return gApp._repartitionNodeTree();
+        }
+        catch (e) {
+            gApp._showError(e.message);
+            console.error(e.stack);
+        }
+        return null;
+    },
+
+    _repartitionNodeTree: function () {
+        try {
+            var partition = d3.partition();
+            gApp._nodeTree.sum(function () { return 1; });
+            gApp._nodeTree = partition(gApp._nodeTree);
             return gApp._nodeTree;
         }
         catch (e) {
             gApp._showError(e.message);
-            console.log(e.stack);
+            console.error(e.stack);
         }
         return null;
     },
@@ -2642,7 +2701,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             { dataIndex: 'PortfolioItemType', headerText: 'Portfolio Item Type' },
             { dataIndex: 'Release', headerText: 'Release' }
         ];
-        var exportTree = gApp._createNodeTree(gApp._nodes);
+        var exportTree = gApp._createNodeTree();
         var csvArray = [];
 
         var formatUtils = {
