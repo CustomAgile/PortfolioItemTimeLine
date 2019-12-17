@@ -20,7 +20,7 @@
 }
 
 .error {
-  fill: #f00;
+  fill: #F66349;
 }
 
 .arrowbox {
@@ -42,19 +42,17 @@
   fill: rgb(0, 0, 0);
 }
 
-.data--errors {
-  fill: #f00;
-}
-
 .dependency-circle:hover {
   cursor: pointer;
 }
 
-path {
-  stroke-opacity: 0.4;
+.no--errors {
+  stroke: #111;
 }
 
-path.data--errors {
+path {
+  stroke-opacity: 0.4;
+  stroke-width: 1px;
   fill: none;
 }
 
@@ -82,35 +80,38 @@ path.dashed5 {
   stroke-dasharray: 8 2
 }
 
-circle.data--errors {
-  fill: #f00;
+path.data--error {
+  stroke: #F66349;
 }
 
-rect.data--errors {
-  stroke: #f00;
+path.data--warning {
+  stroke: #FAD200;
+}
+
+circle.no--errors {
+  fill: #000;
+}
+
+circle.data--error {
+  fill: #F66349;
+}
+
+circle.data--warning {
+  fill: #FAD200;
+}
+
+rect.data--error {
+  stroke: #F66349;
   stroke-width: 1px;
 }
 
-.no--errors {
-  stroke: #111;
-  stroke-width: 1px;
-}
-
-path.no--errors {
-  fill: none;
-}
-
-path.data--errors {
-  stroke: #f00;
+rect.data--warning {
+  stroke: #FAD200;
   stroke-width: 1px;
 }
 
 rect.no--errors {
   stroke: none;
-}
-
-circle.no--errors {
-  fill: #000;
 }
 
 .no--errors--not--started {

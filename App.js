@@ -167,6 +167,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         'PortfolioItemType',
         'Ordinal',
         'Release',
+        'ReleaseStartDate',
+        'ReleaseDate',
         '_type'
     ],
     CARD_DISPLAY_FIELD_LIST: [
@@ -555,7 +557,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             // REJECT
             function (error) {
                 console.warn(error);
-                if (typeof error === 'string' && error.indexOf('Canceled Loading Timeline') !== -1) { }
+                if (typeof error === 'string' && error.indexOf('Canceled Loading Timeline') !== -1) { return; }
                 else {
                     gApp._showError(gApp._parseError(error, 'Failed while fetching portfolio items. Please reload and try again.'));
                 }
@@ -596,7 +598,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         // we  limit the results for performance reasons
         if (scopeAllProjects && typePath === topLevelTypePath) {
             if (ord === 0) {
-                pagesize = 600;
+                pagesize = 100;
                 limit = 600;
             }
             else if (ord === 1) {
@@ -614,7 +616,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
         else {
             if (ord === 0) {
-                pagesize = 600;
+                pagesize = 100;
             }
             else if (ord === 1) {
                 pagesize = 10;
@@ -648,7 +650,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             else { query = parentFilter; }
         }
         else {
-            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, false).catch((e) => {
+            filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, true).catch((e) => {
                 Rally.ui.notify.Notifier.showError({ message: (e.message || e) });
                 gApp.loadingFailed = true;
             });
@@ -1164,12 +1166,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                     if (!e) {
                                         zClass += ' textBlink';
                                     } else {
-                                        if (gApp._sequenceError(d, e)) {
-                                            zClass += ' data--errors';
-                                        }
-                                        else {
-                                            zClass += ' no--errors';
-                                        }
+                                        zClass += gApp._getDependencyColorClass(d, e);
                                     }
 
                                     if (source.node()) {
@@ -1495,7 +1492,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         svg.attr('class', 'rootSurface');
 
         if (gApp.currentScrollX && gApp.previousTimelineWidth) {
-            timelineContainer.setScrollLeft(gApp.currentScrollX + Math.round((timelineWidth - gApp.previousTimelineWidth) / 2));
+            timelineContainer.setScrollLeft(gApp.currentScrollX + Math.round((timelineWidth - gApp.previousTimelineWidth) / 1.8));
         }
         else {
             timelineContainer.setScrollLeft((gApp._daysBetween(new Date(), gApp.tlStart) - gApp._daysBetween(new Date(), Ext.Date.subtract(new Date(), Ext.Date.DAY, gApp.tlBack))) * viewportScaler);
@@ -1537,7 +1534,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     _getGroupClass: function (d) {
         var rClass = 'clickable draggable' + ((d.children || d._children) ? ' children' : '');
         if (gApp._checkSchedule(d)) {
-            rClass += ' data--errors';
+            rClass += ' data--error';
         }
         return rClass;
     },
@@ -1788,8 +1785,25 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             (childStart < d.parent.data.record.PlannedStartDate);
     },
 
-    _sequenceError: function (a, b) {
-        return (a.data.record.PlannedEndDate > b.data.record.PlannedStartDate);
+    _getDependencyColorClass: function (a, b) {
+        let predRelease = a && a.data && a.data.record && a.data.record.Release;
+        let succRelease = b && b.data && b.data.record && b.data.record.Release;
+        let noErrorCls = ' no--errors';
+        let warningCls = ' data--warning';
+        let errorCls = ' data--error';
+
+        if (succRelease && !predRelease) {
+            return errorCls;
+        }
+        else if (succRelease && predRelease){
+            if (succRelease.ReleaseDate === predRelease.ReleaseDate) {
+                return warningCls;
+            }
+            else if (succRelease.ReleaseDate < predRelease.ReleaseDate) {
+                return errorCls;
+            }
+        }
+        return noErrorCls;
     },
 
     _getSuccessors: function (record) {
@@ -1817,19 +1831,17 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _nodeMouseOut: function (node) {
-        if (node.data.card) { node.data.card.hide(); }
+        // if (node.data.card) { node.data.card.hide(); }
     },
 
-    _nodeMouseOver: function (node) {
+    _nodeMouseOver: async function (node) {
         return;
-
-        // TODO - Convert cards to work with custom agile toolkit records
-
         // if (!(node.data.record.ObjectID)) {
         //     //Only exists on real items, so do something for the 'unknown' item
         //     return;
         // } else {
         //     if (!node.data.card) {
+        //         // let record = await this._fetchRecordById(node.data.record._type, node.data.record.ObjectID);
         //         var card = Ext.create('Rally.ui.cardboard.Card', {
         //             'record': node.data.record,
         //             fields: gApp.CARD_DISPLAY_FIELD_LIST,
@@ -1837,7 +1849,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         //             closable: true,
         //             width: gApp.MIN_COLUMN_WIDTH,
         //             height: 'auto',
-        //             floating: true, //Allows us to control via the 'show' event
+        //             floating: true, // Allows us to control via the 'show' event
         //             shadow: false,
         //             showAge: true,
         //             resizable: true,
@@ -1848,11 +1860,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         //             }],
         //             listeners: {
         //                 show: function (card) {
-        //                     //Move card to one side, preferably closer to the centre of the screen
+        //                     //Move card to one side, preferably closer to the center of the screen
         //                     var xpos = d3.event.clientX;
         //                     var ypos = d3.event.clientY;
         //                     card.el.setLeftTop((xpos - (this.getSize().width + 20)) < 0 ? (xpos + 20) : (xpos - (this.getSize().width + 20)),
-        //                         (ypos + this.getSize().height) > gApp.getSize().height ? (gApp.getSize().height - (this.getSize().height + 20)) : (ypos + 10));  //Tree is rotated
+        //                         (ypos + this.getSize().height) > gApp.getSize().height ? (gApp.getSize().height - (this.getSize().height + 20)) : (ypos + 10));  // Tree is rotated
         //                 }
         //             }
         //         });
@@ -2295,34 +2307,26 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             record.get = function (fieldName) {
                 return this[fieldName] || null;
             };
-            record.getId = function () {
-                return this.ObjectID;
-            };
-            // record.isFieldVisible = function () {
+            // record.getId = function () {
+            //     return this.ObjectID;
+            // };
+            // record.hasField = function () {
             //     return true;
+            // };
+
+            // isFieldVisible = function(fieldName) {
+            //     var field = this[fieldName];
+    
+            //     return typeof field !== 'undefined' && !!field;
             // };
             // record.isCustomField = function (field) {
             //     return field.indexOf('c_') > -1;
             // };
-            // record.hasField = function (field) {
-            //     return !!this[field];
-            // };
             // record.getField = function (field) {
             //     return this[field];
             // };
-            // record.getField = function (identifier) {
-            //     return this[identifier];
-            //     // if (Ext.isString(identifier) && identifier.indexOf(":summary") !== -1) {
-            //     //     return this.getField(identifier.split(':summary')[0]);
-            //     // }
-
-            //     // var fields = this.getFields();
-            //     // return _.find(fields, function (field) {
-            //     //     return field.name === identifier || (_.isFunction(field.getUUID) && field.getUUID() === identifier);
-            //     // }) || _.find(fields, { name: 'c_' + identifier });
-
-            // };
             // record.self = record;
+
             nodes.push({ 'Name': record.FormattedID, 'record': record, 'dependencies': [] });
         });
 
