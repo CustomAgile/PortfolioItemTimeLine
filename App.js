@@ -440,7 +440,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             whiteListFields: [
                 'Tags',
                 'Milestones',
-                'c_EnterpriseApprovalEA'
+                'c_EnterpriseApprovalEA',
+                'c_EAEpic'
             ],
             settingsConfig: {
                 labelWidth: 150,
@@ -656,7 +657,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
         }
 
-        for (let i = 0;i < filters.length;i++) {
+        for (let i = 0; i < filters.length; i++) {
             if (query) { query = query.and(filters[i]); }
             else { query = filters[i]; }
         }
@@ -815,12 +816,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             }
 
                             // Not all artifacts will have parents all the way to the top level and must be removed
-                            for (let pass = 0;pass < filterPasses;pass++) {
-                                for (let i = 0;i < allParentRecords.length;i++) {
+                            for (let pass = 0; pass < filterPasses; pass++) {
+                                for (let i = 0; i < allParentRecords.length; i++) {
                                     let parentID = allParentRecords[i].Parent && allParentRecords[i].Parent.ObjectID;
                                     let toDelete = true;
                                     if (parentID) {
-                                        for (let j = 0;j < allParentRecords.length;j++) {
+                                        for (let j = 0; j < allParentRecords.length; j++) {
                                             if (allParentRecords[j].ObjectID === parentID) {
                                                 toDelete = false;
                                                 break;
@@ -834,11 +835,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             allParentRecords = _.filter(allParentRecords, (record) => { return !record.toDelete; });
 
                             // Now filter original result set
-                            for (let i = 0;i < results.length;i++) {
+                            for (let i = 0; i < results.length; i++) {
                                 let parentID = results[i].Parent && results[i].Parent.ObjectID;
                                 let toDelete = true;
                                 if (parentID) {
-                                    for (let j = 0;j < allParentRecords.length;j++) {
+                                    for (let j = 0; j < allParentRecords.length; j++) {
                                         if (allParentRecords[j].ObjectID === parentID) {
                                             toDelete = false;
                                             break;
@@ -1449,7 +1450,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             });
             gApp._redrawTree();
         } else {
-            for (let i = 0;i < gApp._getTopLevelTypeOrdinal();i++) {
+            for (let i = 0; i < gApp._getTopLevelTypeOrdinal(); i++) {
                 d3.selectAll('.collapse-icon').dispatch('expandAll');
                 gApp._redrawTree();
             }
@@ -1795,7 +1796,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         if (succRelease && !predRelease) {
             return errorCls;
         }
-        else if (succRelease && predRelease){
+        else if (succRelease && predRelease) {
             if (succRelease.ReleaseDate === predRelease.ReleaseDate) {
                 return warningCls;
             }
@@ -2316,7 +2317,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
             // isFieldVisible = function(fieldName) {
             //     var field = this[fieldName];
-    
+
             //     return typeof field !== 'undefined' && !!field;
             // };
             // record.isCustomField = function (field) {
@@ -2468,7 +2469,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
     _findChildType: function (record) {
         var ord = null;
-        for (var i = 0;i < gApp._typeStore.length;i++) {
+        for (var i = 0; i < gApp._typeStore.length; i++) {
             if (record._type.toLowerCase() === gApp._typeStore[i].get('TypePath').toLowerCase()) {
                 ord = gApp._typeStore[i].get('Ordinal');
                 ord--;

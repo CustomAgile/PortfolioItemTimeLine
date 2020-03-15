@@ -3,9 +3,10 @@
 <head>
     <title>Enhanced Portfolio Item Timeline</title>
     <!--  (c) 2019 Custom Agile.  All Rights Reserved. -->
-    <!--  Build Date: Thu Jan 09 2020 09:30:40 GMT-0500 (Eastern Standard Time) -->
-    <!--  Version: "0.4.3"-->
-    <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
+    <!--  Build Date: Sun Mar 15 2020 16:35:12 GMT+0100 (Central European Standard Time) -->
+    <!--  Version: "0.4.4"-->
+    <!--  Repository: "https:/github.com/CustomAgile/PortfolioItemTimeLine"-->
+    <script type="text/javascript" src="/apps/2.1/sdk-debug.js"></script>
 
     <script type="text/javascript">
         Rally.onReady(function () {
@@ -177,7 +178,7 @@ multiFilterHelpHtml = `
         `;
 Ext.define('Utils.AncestorPiAppFilter', {
     alias: 'plugin.UtilsAncestorPiAppFilter',
-    version: "1.2.0",
+    version: "1.2.3",
     mixins: [
         'Ext.AbstractPlugin',
         'Rally.Messageable'
@@ -244,7 +245,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * @cfg {Array}
          * Whitelist array for inline filters
          */
-        whiteListFields: ['Tags', 'Milstones'],
+        whiteListFields: ['Tags', 'Milstones', 'c_EAEpic'],
 
         /**
          * @cfg {Array}
@@ -305,7 +306,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * @cfg {Array}
          * Field list for multi-level filter panel
          */
-        defaultFilterFields: ['Owner'],
+        defaultFilterFields: [],
 
         /**
          * @cfg {Boolean}
@@ -317,7 +318,12 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * @cfg {Boolean}
          * Set to true to hide advanced filters on load
          */
-        advancedFilterCollapsed: false
+        advancedFilterCollapsed: false,
+        /**
+         * @cfg {String}
+         * Pass a typePath to set that PI type as the default visible tab
+         */
+        visibleTab: undefined,
     },
     filterControls: [],
     portfolioItemTypes: [],
@@ -326,6 +332,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     isSubscriber: false,
     changeSubscribers: [],
     publishedValue: {},
+    defaultTab: 0,
 
     constructor: function () {
         this.callParent(arguments);
@@ -363,7 +370,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         var appDefaults = this.cmp.defaultSettings;
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter2'] = false;
         appDefaults['Utils.AncestorPiAppFilter.projectScope'] = 'current';
-        appDefaults['Utils.AncestorPiAppFilter.enableMultiLevelPiFilter'] = false;
+        appDefaults['Utils.MultiLevelPiAppFilter.enableMultiLevelPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
         Ext.override(Rally.ui.inlinefilter.InlineFilterPanel, {
@@ -382,7 +389,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             success: function () {
                 Promise.all([this._addAncestorControls(), this._addFilters()]).then(
                     function () {
-                        this._setReady();
+                        setTimeout(function () { this._setReady(); }.bind(this), 500);
                     }.bind(this),
                     function (error) {
                         Rally.ui.notify.Notifier.showError({ message: error });
@@ -492,6 +499,11 @@ Ext.define('Utils.AncestorPiAppFilter', {
         let filters = [];
         let modelName = type.toLowerCase();
         let multiLevelFilters = this.getMultiLevelFilters();
+
+        if (!multiLevelFilters || !Object.keys(multiLevelFilters).length) {
+            return filters;
+        }
+
         let keys = this._getAllTypePaths();
         let currentLevelIndex = _.findIndex(keys, function (currentType) {
             return currentType.toLowerCase() === modelName;
@@ -653,7 +665,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
                 // If filters on custom fields exist, lets get a list of IDs at that level and use those IDs as our filter
                 // This is to overcome an issue with missing indices in Rally's database causing timeouts
-                if (hasCustomFieldFilters) {
+                if (hasCustomFieldFilters && this.getIgnoreProjectScope()) {
                     let parentIDs = [];
                     try {
                         let currentLevelFilters = this._getWsapiFilter(parentType);
@@ -731,6 +743,12 @@ Ext.define('Utils.AncestorPiAppFilter', {
         if (filter) {
             if (filter.property) {
                 if (typeof filter.property === 'string') {
+                    if (filter.config && filter.property === filter.config.property) {
+                        filter.config.property = `${parentPrefix}.${filter.property}`;
+                    }
+                    if (filter.initialConfig && filter.property === filter.initialConfig.property) {
+                        filter.initialConfig.property = `${parentPrefix}.${filter.property}`;
+                    }
                     filter.property = `${parentPrefix}.${filter.property}`;
                 }
                 else {
@@ -875,7 +893,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         }
                     }
                 }
-                setTimeout(function () { this.tabPanel.setActiveTab(0); }.bind(this), 1500);
+                setTimeout(function () { this.tabPanel.setActiveTab(this.defaultTab); }.bind(this), 1500);
             }
             else {
                 this._clearAllFilters();
@@ -1013,6 +1031,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         }
         else {
             this.subscriberEventName = Rally.getApp().getAppId() + this.$className;
+
             // Subscribe to a channel dedicated to this app
             this.subscribe(this, this.subscriberEventName, function (data) {
                 if (this.intervalTimer) {
@@ -1023,9 +1042,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     this.isSubscriber = true;
                     this._hideControlCmp();
                 }
-                this.publishedValue = data;
 
-                if (this.ready) {
+                // We only want to refresh the app if we have all of the filters from the broadcaster
+                if (data.ready) {
+                    this.publishedValue = data;
                     // Default to an ancestor change event for backwards compatibility
                     if (data.changeType === 'ancestor' || !data.changeType) {
                         this._onSelect();
@@ -1033,13 +1053,27 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     else {
                         this._onChange();
                     }
+                } else {
+                    setTimeout(() => { this.publish('registerChangeSubscriber', this.subscriberEventName); }, 500);
                 }
             }, this);
+
             // Attempt to register with a publisher (if one exists)
             this.publish('registerChangeSubscriber', this.subscriberEventName);
-            this.intervalTimer = setInterval(function () {
-                this.publish('registerChangeSubscriber', this.subscriberEventName);
-            }.bind(this), 500);
+            this.registerAttempts = 0;
+            this.intervalTimer = setInterval(() => {
+                this.registerAttempts++;
+
+                // After 15 attempts, there probably isn't a broadcaster present, so delete the interval
+                if (this.registerAttempts >= 15) {
+                    clearInterval(this.intervalTimer);
+                    delete this.intervalTimer;
+                    delete this.registerAttempts;
+                }
+                else {
+                    this.publish('registerChangeSubscriber', this.subscriberEventName);
+                }
+            }, 500);
             this.subscribe(this, 'reRegisterChangeSubscriber', function () {
                 this.publish('registerChangeSubscriber', this.subscriberEventName);
             }, this);
@@ -1070,19 +1104,18 @@ Ext.define('Utils.AncestorPiAppFilter', {
             result.filters = this.getMultiLevelFilters();
             result.filterStates = this.getMultiLevelFilterStates();
             result.wsapiFilters = this.getMultiLevelWsapiFilters();
+            result.ready = this.ready;
         }
         return result;
     },
 
     _setReady: function () {
-        this._updateReleaseValues();
-
         if (this._isSubscriber()) {
             if (this.tabPanel) {
                 this.tabPanel.hide();
             }
 
-            if (this._isSubscriber() && this.showFiltersBtn) {
+            if (this.showFiltersBtn) {
                 this.showFiltersBtn.hide();
             }
 
@@ -1094,9 +1127,12 @@ Ext.define('Utils.AncestorPiAppFilter', {
                 setTimeout(function () {
                     this.ready = true;
                     this.fireEvent('ready', this);
-                }.bind(this), 800);
+                }.bind(this), 3000);
                 return;
             }
+        }
+        else {
+            this._updateReleaseValues();
         }
         this.ready = true;
         this.fireEvent('ready', this);
@@ -1121,6 +1157,9 @@ Ext.define('Utils.AncestorPiAppFilter', {
         if (!currentSettings.hasOwnProperty('Utils.AncestorPiAppFilter.projectScope')) {
             currentSettings['Utils.AncestorPiAppFilter.projectScope'] = 'user';
         }
+        // if (!currentSettings.hasOwnProperty('Utils.MultiLevelPiAppFilter.enableMultiLevelPiFilter')) {
+        //     currentSettings['Utils.MultiLevelPiAppFilter.enableMultiLevelPiFilter'] = this.displayMultiLevelFilter;
+        // }
         var pluginSettingsFields = [{
             xtype: 'rallycheckboxfield',
             id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter2',
@@ -1728,7 +1767,29 @@ Ext.define('Utils.AncestorPiAppFilter', {
                                     advancedFilterRowsFlex = 2;
                                 }
 
+                                // If a default visible tab is specified, we need to convert an
+                                // artifact ordinal to a tab index
+                                // Tab indices start at 0 for top-most portfolio item
+                                // Artfiact ordinals start at -1 for user stories, 0 for Features, etc...
+                                let ordinalLookup = {};
+                                let modelLength = Object.keys(models).length;
+                                if (this.visibleTab) {
+                                    for (let i = 0; i < modelLength; i++) {
+                                        ordinalLookup[i] = modelLength - i - 1;
+                                    }
+                                }
+
                                 _.each(models, function (model, key) {
+                                    if (this.visibleTab && this.visibleTab.toLowerCase() === key.toLowerCase()) {
+                                        let ord = model.ordinal;
+                                        if (typeof ord === 'number') {
+                                            let newDefaultTab = ordinalLookup[ord + 1];
+                                            if (typeof newDefaultTab === 'number') {
+                                                this.defaultTab = newDefaultTab;
+                                            }
+                                        }
+                                    }
+
                                     promises.push(new Promise(function (newResolve) {
                                         let filterName = `inlineFilter${key}`;
                                         this.filterControls.push(Ext.create('Rally.ui.inlinefilter.InlineFilterControl', {
@@ -1798,7 +1859,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                                         });
 
                                         this.btnRenderArea.add(this.clearAllButton);
-                                        this.tabPanel.setActiveTab(0);
+                                        this.tabPanel.setActiveTab(this.defaultTab);
                                         if (this.filtersHidden) {
                                             this.tabPanel.hide();
                                         }
@@ -1842,7 +1903,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     _clearAllFilters: function () {
         this.suspendEvents(false);
-        this.suspendLayouts();
 
         // The quick filters don't properly clear if the filter isn't displayed
         let activeTab = this.tabPanel.getActiveTab();
@@ -1850,7 +1910,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
         _.each(this.filterControls, function (filterControl) {
             try {
                 this.tabPanel.setActiveTab(filterControl.tab);
+                filterControl.inlineFilterButton.suspendEvents(false);
                 filterControl.inlineFilterButton.clearAllFilters();
+                filterControl.inlineFilterButton.saveState();
+                filterControl.inlineFilterButton.resumeEvents();
             }
             catch (e) {
                 console.log(e);
@@ -1858,15 +1921,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
         }.bind(this));
 
         this.tabPanel.setActiveTab(activeTab);
-
-        if (this.clearAllButton) {
-            this.clearAllButton.hide();
-        }
-
         this.resumeEvents();
-        this.resumeLayouts(false);
-        this.updateLayout();
-        this.fireEvent('change', this.getMultiLevelFilters());
+        this._onFilterChange();
     },
 
     _hasFilters: function () {
@@ -19330,7 +19386,8 @@ Object.defineProperty(exports, '__esModule', { value: true });
             whiteListFields: [
                 'Tags',
                 'Milestones',
-                'c_EnterpriseApprovalEA'
+                'c_EnterpriseApprovalEA',
+                'c_EAEpic'
             ],
             settingsConfig: {
                 labelWidth: 150,
@@ -19546,7 +19603,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             });
         }
 
-        for (let i = 0;i < filters.length;i++) {
+        for (let i = 0; i < filters.length; i++) {
             if (query) { query = query.and(filters[i]); }
             else { query = filters[i]; }
         }
@@ -19705,12 +19762,12 @@ Object.defineProperty(exports, '__esModule', { value: true });
                             }
 
                             // Not all artifacts will have parents all the way to the top level and must be removed
-                            for (let pass = 0;pass < filterPasses;pass++) {
-                                for (let i = 0;i < allParentRecords.length;i++) {
+                            for (let pass = 0; pass < filterPasses; pass++) {
+                                for (let i = 0; i < allParentRecords.length; i++) {
                                     let parentID = allParentRecords[i].Parent && allParentRecords[i].Parent.ObjectID;
                                     let toDelete = true;
                                     if (parentID) {
-                                        for (let j = 0;j < allParentRecords.length;j++) {
+                                        for (let j = 0; j < allParentRecords.length; j++) {
                                             if (allParentRecords[j].ObjectID === parentID) {
                                                 toDelete = false;
                                                 break;
@@ -19724,11 +19781,11 @@ Object.defineProperty(exports, '__esModule', { value: true });
                             allParentRecords = _.filter(allParentRecords, (record) => { return !record.toDelete; });
 
                             // Now filter original result set
-                            for (let i = 0;i < results.length;i++) {
+                            for (let i = 0; i < results.length; i++) {
                                 let parentID = results[i].Parent && results[i].Parent.ObjectID;
                                 let toDelete = true;
                                 if (parentID) {
-                                    for (let j = 0;j < allParentRecords.length;j++) {
+                                    for (let j = 0; j < allParentRecords.length; j++) {
                                         if (allParentRecords[j].ObjectID === parentID) {
                                             toDelete = false;
                                             break;
@@ -20339,7 +20396,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             });
             gApp._redrawTree();
         } else {
-            for (let i = 0;i < gApp._getTopLevelTypeOrdinal();i++) {
+            for (let i = 0; i < gApp._getTopLevelTypeOrdinal(); i++) {
                 d3.selectAll('.collapse-icon').dispatch('expandAll');
                 gApp._redrawTree();
             }
@@ -20685,7 +20742,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
         if (succRelease && !predRelease) {
             return errorCls;
         }
-        else if (succRelease && predRelease){
+        else if (succRelease && predRelease) {
             if (succRelease.ReleaseDate === predRelease.ReleaseDate) {
                 return warningCls;
             }
@@ -21206,7 +21263,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
             // isFieldVisible = function(fieldName) {
             //     var field = this[fieldName];
-    
+
             //     return typeof field !== 'undefined' && !!field;
             // };
             // record.isCustomField = function (field) {
@@ -21358,7 +21415,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
     _findChildType: function (record) {
         var ord = null;
-        for (var i = 0;i < gApp._typeStore.length;i++) {
+        for (var i = 0; i < gApp._typeStore.length; i++) {
             if (record._type.toLowerCase() === gApp._typeStore[i].get('TypePath').toLowerCase()) {
                 ord = gApp._typeStore[i].get('Ordinal');
                 ord--;
@@ -21821,7 +21878,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
             Rally.launchApp('CustomAgile.apps.PortfolioItemTimeline.app', {
                 name:"Enhanced Portfolio Item Timeline",
                 parentRepos:"",
-                version:"0.4.3"
+                version:"0.4.4"
             });
 
         });

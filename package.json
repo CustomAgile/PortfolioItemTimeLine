@@ -1,7 +1,8 @@
 {
   "name": "portfolio-item-timeline",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
+  "repository": "https://github.com/CustomAgile/PortfolioItemTimeLine",
   "dependencies": {
     "@agile-central-technical-services/utils-shared-views": "^1.0.2",
     "@customagile/ancestor-pi-multi-level-pi-app-filter": "git+https://github.com/CustomAgile/utils-ancestor-pi-app-filter.git",
