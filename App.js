@@ -441,7 +441,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 'Tags',
                 'Milestones',
                 'c_EnterpriseApprovalEA',
-                'c_EAEpic'
+                'c_EAEpic',
+                'DisplayColor'
             ],
             settingsConfig: {
                 labelWidth: 150,
