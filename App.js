@@ -253,7 +253,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.loadingTimeline = false;
         Rally.data.wsapi.Proxy.superclass.timeout = 240000;
         Rally.data.wsapi.batch.Proxy.superclass.timeout = 240000;
-        gApp.client = new CustomAgile.Client('', { project: gApp.getContext().getProjectRef(), workspace: this.getContext().getWorkspaceRef(), maxConcurrentRequests: 8 });
+        gApp.client = new CustomAgileToolkit.Client('', { project: gApp.getContext().getProjectRef(), workspace: this.getContext().getWorkspaceRef(), maxConcurrentRequests: 8 });
 
         let width = gApp.getEl().getWidth();
         let height = gApp.getEl().getHeight();
@@ -316,41 +316,63 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             }
         ]);
 
-        gApp.tabPanel = gApp.down('#filterBox').add(
-            {
-                xtype: 'tabpanel',
-                cls: 'blue-tabs',
-                activeTab: 0,
-                plain: true,
-                hideMode: 'offsets',
-                autoRender: true,
-                minTabWidth: 140,
-                items: [
-                    {
-                        title: 'Chart Controls',
-                        html: '',
-                        itemId: 'chartControlsTab'
+        gApp.tabPanel = gApp.down('#filterBox').add({
+            xtype: 'tabpanel',
+            cls: 'blue-tabs',
+            activeTab: 2,
+            plain: true,
+            hideMode: 'offsets',
+            autoRender: true,
+            minTabWidth: 140,
+            items: [
+                {
+                    title: 'Chart Controls',
+                    html: '',
+                    itemId: 'chartControlsTab'
+                },
+                {
+                    title: 'Filters',
+                    html: '',
+                    itemId: 'chartFiltersTab',
+                    padding: 0,
+                    items: [{
+                        xtype: 'container',
+                        itemId: 'chartFilterButtonArea',
+                        margin: 5,
+                        layout: {
+                            type: 'hbox',
+                            align: 'middle',
+                            defaultMargins: '0 15 15 0'
+                        }
                     },
                     {
-                        title: 'Filters',
-                        html: '',
-                        itemId: 'chartFiltersTab',
-                        padding: 0
-                        // tabConfig: {
-                        //     tooltip: '<div><p>After setting all of your desired filters, click the green button to apply the filters and refresh the timeline. Clicking the "Clear All" button will automatically remove all filters and refresh the timeline</p><p>When filters are active, the timeline will remove all portfolio items that have no children (excluding the lowest level PI), starting from the lowest filtered portfolio item type and working up the hierarchy.</p><p>Example: If you filter by feature owner, then all epics without any features fitting the filter criteria will not show on the timeline.</p></div>'
-                        // },
-                        // iconCls: 'icon-help'
-                    },
-                    {
-                        title: 'Ancestor Chooser',
-                        html: '',
-                        itemId: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
-                        padding: 10,
-                        height: 65,
-                        width: '95%'
-                    }
-                ]
-            });
+                        xtype: 'container',
+                        itemId: 'chartFilterPanelArea',
+                        margin: 5,
+                        layout: {
+                            type: 'hbox'
+                        }
+                    }]
+                },
+                {
+                    title: 'Ancestor Chooser',
+                    html: '',
+                    itemId: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
+                    padding: 10,
+                    height: 65,
+                    width: '95%'
+                }
+            ]
+        });
+
+        gApp.tabPanel.on('beforetabchange', (tabs, newTab) => {
+            if (newTab.title.toLowerCase().indexOf('controls') > -1) {
+                this.ancestorFilterPlugin.hideHelpButton();
+            }
+            else {
+                this.ancestorFilterPlugin.showHelpButton();
+            }
+        });
 
         gApp.down('#filterBox').on('resize', gApp._setTimelineHeight);
         gApp._addAncestorPlugin();
@@ -390,40 +412,20 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _addAncestorPlugin: function () {
-        gApp.down('#chartFiltersTab').add([
+        gApp.down('#chartFilterButtonArea').add([
             {
-                xtype: 'container',
-                itemId: 'chartFilterButtonArea',
-                margin: 5,
-                layout: {
-                    type: 'hbox',
-                    align: 'middle',
-                    defaultMargins: '0 15 15 0'
-                },
-                items: [
-                    {
-                        xtype: 'rallybutton',
-                        itemId: 'applyFiltersBtn',
-                        handler: gApp._applyFilters,
-                        text: 'Apply filters to timeline',
-                        cls: 'apply-filters-button',
-                        disabled: true
-                    },
-                    {
-                        xtype: 'component',
-                        id: 'subscriberFilterIndicator',
-                        html: '<span class="icon-link icon-large"></span>',
-                        hidden: true
-                    }
-                ]
+                xtype: 'rallybutton',
+                itemId: 'applyFiltersBtn',
+                handler: gApp._applyFilters,
+                text: 'Apply filters to timeline',
+                cls: 'apply-filters-button',
+                disabled: true
             },
             {
-                xtype: 'container',
-                itemId: 'chartFilterPanelArea',
-                margin: 5,
-                layout: {
-                    type: 'hbox'
-                }
+                xtype: 'component',
+                id: 'subscriberFilterIndicator',
+                html: '<span class="icon-link icon-large"></span>',
+                hidden: true
             }
         ]);
 
@@ -432,18 +434,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             pluginId: 'ancestorFilterPlugin',
             panelRenderAreaId: 'chartFilterPanelArea',
             btnRenderAreaId: 'chartFilterButtonArea',
-            filtersHidden: false,
             allowNoEntry: false,
+            displayMultiLevelFilter: true,
             labelStyle: 'font-size: 14px',
             ownerLabel: '',
             ownerLabelWidth: 0,
-            whiteListFields: [
-                'Tags',
-                'Milestones',
-                'c_EnterpriseApprovalEA',
-                'c_EAEpic',
-                'DisplayColor'
-            ],
             settingsConfig: {
                 labelWidth: 150,
                 padding: 10
@@ -470,6 +465,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         gApp.down('#subscriberFilterIndicator').show();
                     }
                     gApp.advFilters = await plugin.getMultiLevelFilters();
+                    gApp.tabPanel.setActiveTab(0);
                     gApp._kickOff();
                 },
                 single: true
@@ -561,7 +557,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 console.warn(error);
                 if (typeof error === 'string' && error.indexOf('Canceled Loading Timeline') !== -1) { return; }
                 else {
-                    gApp._showError(gApp._parseError(error, 'Failed while fetching portfolio items. Please reload and try again.'));
+                    gApp._showError(error, 'Failed while fetching portfolio items. Please reload and try again.');
                 }
             }
         ).finally(function () {
@@ -653,7 +649,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
         else {
             filters = await gApp.ancestorFilterPlugin.getMultiLevelFiltersForType(typePath, true).catch((e) => {
-                Rally.ui.notify.Notifier.showError({ message: (e.message || e) });
+                gApp._showError(e, 'Failed while loading filters');
                 gApp.loadingFailed = true;
             });
         }
@@ -904,7 +900,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     // Used to set both axis dates without triggering the redraw twice
     _setAxisDateFields: function (start, end) {
         if (end < start) {
-            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
+            gApp._showError('End date must be greater than start date');
             return;
         }
 
@@ -1328,7 +1324,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         var endDate = axisEnd.getValue();
 
         if (endDate < startDate) {
-            Rally.ui.notify.Notifier.showError({ message: 'End date must be greater than start date' });
+            gApp._showError('End date must be greater than start date');
             return;
         }
 
@@ -1468,7 +1464,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         let controlsHeight = gApp.down('#piControlsContainer').getHeight();
         let appHeight = gApp.getHeight();
 
-        return appHeight - filterHeight - controlsHeight - 40;
+        return appHeight - filterHeight - controlsHeight - 50;
     },
 
     _setTimelineHeight: function () {
@@ -2072,7 +2068,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     });
                 },
                 failure: function () {
-                    Rally.ui.notify.Notifier.showError({ message: 'Error while loading portfolio item type store' });
+                    gApp._showError('Error while loading portfolio item type store');
                     reject();
                 },
                 scope: this
@@ -2087,6 +2083,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     xtype: 'rallysharedviewcombobox',
                     title: 'Shared Views',
                     itemId: 'timelineSharedViewCombobox',
+                    stateful: true,
+                    stateId: gApp.getContext().getScopedStateId('portfolioitemtimeline-sharedviewcombo'),
                     enableUrlSharing: true,
                     context: gApp.getContext(),
                     cmp: gApp,
@@ -2242,7 +2240,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             gApp.releases = await gApp._getTimebox('Release', ['Name', 'ReleaseStartDate', 'ReleaseDate']);
         } catch (e) {
             gApp.releases = [];
-            Rally.ui.notify.Notifier.showError({ message: 'Error while fetching releases' });
+            gApp._showError(e, 'Error while fetching releases');
         }
     },
 
@@ -2251,7 +2249,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             gApp.iterations = await gApp._getTimebox('Iteration', ['Name', 'StartDate', 'EndDate']);
         } catch (e) {
             gApp.iterations = [];
-            Rally.ui.notify.Notifier.showError({ message: 'Error while fetching iterations' });
+            gApp._showError(e, 'Error while fetching iterations');
         }
     },
 
@@ -2265,7 +2263,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             gApp.milestones = await gApp._getTimebox('Milestone', ['Name', 'FormattedID', 'TargetDate'], filter);
         } catch (e) {
             gApp.milestones = [];
-            Rally.ui.notify.Notifier.showError({ message: 'Error while fetching milestones' });
+            gApp._showError(e, 'Error while fetching milestones');
         }
     },
 
@@ -2613,7 +2611,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             return gApp._repartitionNodeTree();
         }
         catch (e) {
-            gApp._showError(e.message);
+            gApp._showError(e);
             console.error(e.stack);
         }
         return null;
@@ -2627,7 +2625,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             return gApp._nodeTree;
         }
         catch (e) {
-            gApp._showError(e.message);
+            gApp._showError(e);
             console.error(e.stack);
         }
         return null;
@@ -2804,11 +2802,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
     },
 
-    _showError: function (msg) {
-        Rally.ui.notify.Notifier.showError({ message: msg });
+    _showError(msg, defaultMessage) {
+        Rally.ui.notify.Notifier.showError({ message: this.parseError(msg, defaultMessage) });
     },
 
-    _parseError(e, defaultMessage) {
+    parseError(e, defaultMessage) {
+        defaultMessage = defaultMessage || 'An unknown error has occurred';
+
         if (typeof e === 'string' && e.length) {
             return e;
         }
@@ -2903,7 +2903,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             await gApp._refreshTimeline();
             gApp._setAxisDateFields(new Date(view.axisStartDate), new Date(view.axisEndDate));
             gApp.preventViewReset = false;
-        }.bind(this), 300);
+        }.bind(this), 2000);
     },
 
     _getSelectedRowLabelId: function () {

@@ -5,7 +5,7 @@
     "sdk": "2.1",
     "javascript": [
         "./node_modules/custom-agile-toolkit/web.js",
-        "./node_modules/@agile-central-technical-services/utils-shared-views/index.js",
+        "node_modules/@customagile/utils-shared-views/index.js",
         "./node_modules/@customagile/ancestor-pi-multi-level-pi-app-filter/index.js",
         "./utils/Query.js",
         "./utils/overrides.js",
@@ -14,6 +14,7 @@
         "App.js"
     ],
     "css": [
+        "./node_modules/@customagile/ancestor-pi-multi-level-pi-app-filter/index.css",
         "app.css"
     ],
     "templates": "./templates"
