@@ -276,44 +276,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     align: 'middle'
                 }
             },
-            {
-                xtype: 'rallycombobox',
-                itemId: 'scopeCombobox',
-                stateful: true,
-                stateId: gApp.getContext().getScopedStateId('CustomAgile.PortfolioItemTimeline.projectScopeControl'),
-                stateEvents: ['select'],
-                displayField: 'text',
-                valueField: 'value',
-                fieldLabel: 'Scope ',
-                afterLabelTextTpl: "<span id='scope-help-icon' style='font-size:12px' class='icon-help'> </span>",
-                labelStyle: 'font-size: 14px',
-                labelWidth: 60,
-                storeConfig: {
-                    fields: ['text', 'value'],
-                    data: [{
-                        text: "Current Project(s)",
-                        value: false
-                    }, {
-                        text: "Any Project",
-                        value: true
-                    }]
-                },
-                listeners: {
-                    scope: this,
-                    change: function () {
-                        gApp._onScopeChange();
-                    },
-                    afterrender: function (tooltip) {
-                        Ext.create('Rally.ui.tooltip.ToolTip', {
-                            target: (tooltip.labelEl && tooltip.labelEl.dom.children.length && tooltip.labelEl.dom.children[0]) || tooltip.labelEl,
-                            html: '<div><p>Scoping only applied to top level. All child artifacts will be returned regardless of project.</p><p>When scoping across all projects, top level results will be limited</p></div>',
-                            itemId: 'scopeTip',
-                            id: 'scopeTip',
-                            showDelay: 200
-                        });
-                    }
-                },
-            }
         ]);
 
         gApp.tabPanel = gApp.down('#filterBox').add({
@@ -353,15 +315,8 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                             type: 'hbox'
                         }
                     }]
-                },
-                {
-                    title: 'Ancestor Chooser',
-                    html: '',
-                    itemId: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
-                    padding: 10,
-                    height: 65,
-                    width: '95%'
                 }
+
             ]
         });
 
@@ -401,7 +356,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             await gApp._addSharedViewsCombo();
             document.getElementById('timelineContainer').onscroll = gApp._timelineScrolled;
             gApp._updateFilterTabText();
-            gApp._updateAncestorTabText();
+            //gApp._updateAncestorTabText();
             gApp.ready = true;
             if (gApp.loadingFailed) {
                 gApp.setLoading(false);
@@ -439,6 +394,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             labelStyle: 'font-size: 14px',
             ownerLabel: '',
             ownerLabelWidth: 0,
+            disableAncestorFilter: true,
             settingsConfig: {
                 labelWidth: 150,
                 padding: 10
@@ -446,9 +402,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             listeners: {
                 scope: gApp,
                 ready: async function (plugin) {
-                    if (gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl') && gApp.down('#scopeCombobox')) {
-                        gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl').setValue(gApp.down('#scopeCombobox').getValue());
-                    }
 
                     plugin.addListener({
                         scope: gApp,
@@ -458,7 +411,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                         change: gApp._onFilterChange
                     });
 
-                    gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl').hide();
                     if (gApp.ancestorFilterPlugin._isSubscriber()) {
                         gApp.down('#applyFiltersBtn').hide();
                         gApp.down('#chartFiltersTab').hide();
@@ -652,6 +604,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 gApp._showError(e, 'Failed while loading filters');
                 gApp.loadingFailed = true;
             });
+
+            let prjFilters = await this.ancestorFilterPlugin.getProjectsAsFilters().catch((e) => {
+                this.showError(e, 'Failed while loading multi level project filters');
+            });
+
+            if (prjFilters) {
+                filters = filters.concat(prjFilters);
+            }
+
         }
 
         for (let i = 0; i < filters.length; i++) {
@@ -1286,7 +1247,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         gApp.setCurrentView({
             piTypeCombobox: gApp._getTopLevelTypePath(),
-            scopeCombobox: false,
             axisStartDate: gApp.tlStart,
             axisEndDate: gApp.tlEnd,
             axisLabels: {
@@ -1896,9 +1856,16 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _onAncestorFilterChange: async function () {
-        gApp._updateAncestorTabText();
-        await gApp._updatePiTypeList();
-        gApp._refreshTimeline();
+        // If user is a subscriber, update timeline, otherwise store the added filter
+        if (gApp.ancestorFilterPlugin._isSubscriber()) {
+            gApp._applyFilters(gApp.down('#applyFiltersBtn'));
+        }
+        else {
+            gApp.down('#applyFiltersBtn').setDisabled(false);
+        }
+        gApp._clearSharedViewCombo();
+
+
     },
 
     onTimeboxScopeChange: function (newTimebox) {
@@ -1926,17 +1893,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp._refreshTimeline();
     },
 
-    _onScopeChange: function () {
-        if (!gApp.ready) {
-            return;
-        }
-        if (gApp.ancestorFilterPlugin && gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl') && gApp.down('#scopeCombobox')) {
-            gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl').setValue(gApp.down('#scopeCombobox').getValue());
-        }
-        else {
-            gApp._refreshTimeline();
-        }
-    },
 
     _onRowLabelChange: function (radio, newValue) {
         // Called twice when selected new radio button
@@ -1954,13 +1910,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
 
         var titleText = totalFilters ? `FILTERS (${totalFilters})` : 'FILTERS';
         var tab = gApp.tabPanel.child('#chartFiltersTab');
-
-        if (tab) { tab.setTitle(titleText); }
-    },
-
-    _updateAncestorTabText: function () {
-        var titleText = gApp._isAncestorSelected() ? 'ANCESTOR CHOOSER (*)' : 'ANCESTOR CHOOSER';
-        var tab = gApp.tabPanel.child(`#${Utils.AncestorPiAppFilter.RENDER_AREA_ID}`);
 
         if (tab) { tab.setTitle(titleText); }
     },
@@ -2498,7 +2447,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     _getScopeAllProjects: function () {
-        return gApp.down('#scopeCombobox').getValue();
+        return gApp.ancestorFilterPlugin._ignoreProjectScope();
     },
 
     _isAncestorSelected: function () {
@@ -2831,12 +2780,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
     },
 
     getCurrentView: function () {
-        let ancestorData = gApp.ancestorFilterPlugin._getValue();
+        let ancestorPlugin = gApp.ancestorFilterPlugin;
+        let ancestorData = {};
+        if (ancestorPlugin && !(ancestorPlugin._isSubscriber())) {
+            ancestorData = ancestorPlugin.getCurrentView();
+        }
         delete ancestorData.piRecord;
 
         return {
             piTypeCombobox: gApp._getTopLevelTypePath(),
-            scopeCombobox: gApp._getScopeAllProjects(),
             axisStartDate: gApp.down('#axisStartDate').getValue(),
             axisEndDate: gApp.down('#axisEndDate').getValue(),
             axisLabels: {
@@ -2869,7 +2821,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.settingView = true;
         gApp.preventViewReset = true;
         gApp.down('#piTypeCombobox').setValue(view.piTypeCombobox);
-        gApp.down('#scopeCombobox').setValue(view.scopeCombobox);
         gApp.down('#axisStartDate').setValue(new Date(view.axisStartDate));
         gApp.down('#axisEndDate').setValue(new Date(view.axisEndDate));
         gApp.down('#dateAxisCheckbox').setValue(view.axisLabels.dates);
@@ -2883,17 +2834,13 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         gApp.down('#todayGridlineCheckbox').setValue(view.gridlines.today);
         gApp._setSelectedRowLabelId(view.rowLabels);
         gApp.down(`#${view.percentDone}`).setValue(true);
-        gApp.ancestorFilterPlugin.setMultiLevelFilterStates(view.filters);
 
-        if (gApp.ancestorFilterPlugin.piTypeSelector && view.ancestor.piTypePath) {
-            await gApp.ancestorFilterPlugin._setPiSelector(view.ancestor.piTypePath, view.ancestor.pi);
+
+        if (gApp.ancestorFilterPlugin) {
+            await gApp.ancestorFilterPlugin.setCurrentView(view.ancestor);
         }
 
-        if (gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl')) {
-            gApp.ancestorFilterPlugin.renderArea.down('#ignoreScopeControl').setValue(view.scopeCombobox);
-        }
 
-        gApp._updateAncestorTabText();
 
         setTimeout(async function () {
             gApp.down('#applyFiltersBtn').setDisabled(true);
