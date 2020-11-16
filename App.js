@@ -1002,7 +1002,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 .attr('class', 'milestone-line')
                 .on('mouseover', function (d) {
                     let tipText = [
-                        `${d.FormattedID}: ${d.data.Name}`,
+                        `${d.data.FormattedID}: ${d.data.Name}`,
                         `Target Date: ${Rally.util.DateTime.format(d.data.TargetDate, 'm-d-y')}`
                     ];
                     let tipId = `${d.data.FormattedID}-milestone-line`;
