@@ -38,7 +38,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                         labelWidth: 40,
                         margin: 5,
                         validateOnChange: true,
-                        listeners: { aftervalidate: this.cmp._onAxisDateChange }
+                        listeners: { scope: this.cmp, aftervalidate: this.cmp._onAxisDateChange }
                     },
                     {
                         xtype: 'rallydatefield',
@@ -50,7 +50,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                         labelWidth: 40,
                         margin: 5,
                         validateOnChange: true,
-                        listeners: { aftervalidate: this.cmp._onAxisDateChange }
+                        listeners: { scope: this.cmp, aftervalidate: this.cmp._onAxisDateChange }
                     }
                 ]
             },
@@ -95,7 +95,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                 style: this.fontStyle,
                 margin: 0,
                 itemId: 'resetViewBtn',
-                handler: this.cmp._resetAxis
+                handler: () => this.cmp._resetAxis()
             },
             {
                 xtype: 'panel',
@@ -132,7 +132,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.dateAxisCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._setAxis
+                                handler: () => this.cmp._setAxis()
                             },
                             {
                                 boxLabel: 'Iterations',
@@ -143,7 +143,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.iterationsCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._redrawTree
+                                handler: () => this.cmp._redrawTree()
                             },
                             {
                                 boxLabel: 'Releases',
@@ -154,7 +154,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.releasesCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._redrawTree
+                                handler: () => this.cmp._redrawTree()
                             }
                         ]
                     }
@@ -195,7 +195,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.dateGridlineCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._setAxis
+                                handler: () => this.cmp._setAxis()
                             },
                             {
                                 boxLabel: 'Iterations',
@@ -206,7 +206,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.iterationGridlineCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._setAxis
+                                handler: () => this.cmp._setAxis()
                             },
                             {
                                 boxLabel: 'Releases',
@@ -217,7 +217,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.releaseGridlineCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._setAxis
+                                handler: () => this.cmp._setAxis()
                             }
                         ]
                     },
@@ -244,7 +244,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.milestoneGridlineCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._setAxis
+                                handler: () => this.cmp._setAxis()
                             },
                             {
                                 boxLabel: 'Dependencies',
@@ -255,7 +255,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.showDependenciesCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._setAxis
+                                handler: () => this.cmp._setAxis()
                             },
                             {
                                 boxLabel: 'Today',
@@ -266,7 +266,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                                 stateful: true,
                                 stateId: this.context.getScopedStateId('PortfolioItemTimeline.todayGridlineCheckbox'),
                                 stateEvents: ['change'],
-                                handler: this.cmp._setAxis
+                                handler: () => this.cmp._setAxis()
                             }
                         ]
                     }
@@ -304,7 +304,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                             stateful: true,
                             stateId: this.context.getScopedStateId('PortfolioItemTimeline.showLabelsCheckbox'),
                             stateEvents: ['change'],
-                            handler: this.cmp._onRowLabelChange
+                            handler: () => this.cmp._onRowLabelChange()
                         },
                         {
                             boxLabel: 'ID + Short Name',
@@ -315,7 +315,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                             stateful: true,
                             stateId: this.context.getScopedStateId('PortfolioItemTimeline.shortenLabelsCheckbox'),
                             stateEvents: ['change'],
-                            handler: this.cmp._onRowLabelChange
+                            handler: () => this.cmp._onRowLabelChange()
                         },
                         {
                             boxLabel: 'ID only',
@@ -326,7 +326,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                             stateful: true,
                             stateId: this.context.getScopedStateId('PortfolioItemTimeline.idOnlyCheckbox'),
                             stateEvents: ['change'],
-                            handler: this.cmp._onRowLabelChange
+                            handler: () => this.cmp._onRowLabelChange()
                         }
                     ]
                 }]
@@ -363,7 +363,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                             stateful: true,
                             stateId: this.context.getScopedStateId('PortfolioItemTimeline.doneByEstimateCheckbox'),
                             stateEvents: ['change'],
-                            handler: this.cmp._redrawTree
+                            handler: () => this.cmp._redrawTree()
                         },
                         {
                             boxLabel: 'By Story Count',
@@ -392,7 +392,7 @@ Ext.define('CustomAgile.PortfolioItemTimeline.ChartControls', {
                 iconCls: 'icon-export',
                 height: 22,
                 toolTipText: 'Export Timeline...',
-                handler: this.cmp._exportTimeline
+                handler: () => this.cmp._exportTimeline()
             }
         ];
         this.callParent(arguments);

@@ -5,8 +5,7 @@
   "repository": "https://github.com/CustomAgile/PortfolioItemTimeLine",
   "dependencies": {
     "@customagile/ancestor-pi-multi-level-pi-app-filter": "git+https://github.com/CustomAgile/utils-ancestor-pi-app-filter.git",
-    "@customagile/utils-shared-views": "git+https://github.com/CustomAgile/utils-shared-views.git",
-    "custom-agile-toolkit": "^1.0.3"
+    "@customagile/utils-shared-views": "git+https://github.com/CustomAgile/utils-shared-views.git"
   },
   "devDependencies": {
     "jshint": "2.10.2"
