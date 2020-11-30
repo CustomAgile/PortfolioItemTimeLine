@@ -50,41 +50,41 @@
   stroke: #111;
 }
 
-path {
+.dep-path {
   stroke-opacity: 0.7;
   stroke-width: 1.2px;
   fill: none;
 }
 
-path.dashed0 {
+.dep-path.dashed0 {
   stroke-dasharray: none
 }
 
-path.dashed1 {
+.dep-path.dashed1 {
   stroke-dasharray: 48 2
 }
 
-path.dashed2 {
+.dep-path.dashed2 {
   stroke-dasharray: 38 2
 }
 
-path.dashed3 {
+.dep-path.dashed3 {
   stroke-dasharray: 28 2
 }
 
-path.dashed4 {
+.dep-path.dashed4 {
   stroke-dasharray: 18 2
 }
 
-path.dashed5 {
+.dep-path.dashed5 {
   stroke-dasharray: 8 2
 }
 
-path.data--error {
+.dep-path.data--error {
   stroke: #F66349;
 }
 
-path.data--warning {
+.dep-path.data--warning {
   stroke: #FAD200;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "portfolio-item-timeline",
-  "version": "0.4.6",
+  "version": "0.5.1",
   "private": true,
   "repository": "https://github.com/CustomAgile/PortfolioItemTimeLine",
   "dependencies": {

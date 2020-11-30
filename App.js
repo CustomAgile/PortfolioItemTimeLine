@@ -160,6 +160,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         'PercentDoneByStoryPlanEstimate',
         'Predecessors',
         'Successors',
+        'Milestones',
         'PredecessorsAndSuccessors',
         'State',
         'Value',
@@ -936,10 +937,15 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         }
 
         if (this.milestones && this.milestones.length && this.down('#milestoneGridlineCheckbox').getValue()) {
+            this.milestoneXAxisHash = {};
             this.gX.selectAll('milestoneticks')
                 .data(this.milestones)
                 .enter().append('line')
-                .attr('x1', d => this.dateScaler(d.data.TargetDate))
+                .attr('x1', d => {
+                    let x = this.dateScaler(d.data.TargetDate);
+                    this.milestoneXAxisHash[d.data.FormattedID] = x;
+                    return x;
+                })
                 .attr('y1', topPadding)
                 .attr('x2', d => this.dateScaler(d.data.TargetDate))
                 .attr('y2', () => height)
@@ -957,6 +963,27 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                     d3.select(this).attr('class', 'milestone-line');
                     d3.select(`#${d.data.FormattedID}-milestone-line`).remove();
                 });
+
+            let tree = d3.select('#zoomTree');
+
+            this._nodeTree.each(d => {
+                if (!d.data.record.ObjectID) { return; }
+                let milestones = d.data.record.Milestones;
+
+                if (milestones && milestones.Count) {
+                    for (let m of milestones._tagsNameArray) {
+                        let milestoneX = this.milestoneXAxisHash[m.FormattedID];
+                        if (milestoneX) {
+                            tree.append('path')
+                                .attr('d', d3.symbol().type(d3.symbolDiamond).size(this._rowHeight * 3)())
+                                .attr('fill', m.DisplayColor || '#D1D1D1')
+                                .attr('transform', () => {
+                                    return `translate(${milestoneX},${d.plannedDrawnY + (this._rowHeight / 4)})`;
+                                });
+                        }
+                    }
+                }
+            });
         }
 
         if (this.down('#todayGridlineCheckbox').getValue()) {
@@ -1053,12 +1080,12 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                 if (!d.data.record.ObjectID) { return; }
                 let deps = d.data.record.Successors;
                 if (deps && deps.Count) {
-                    this._getSuccessors(d.data.record).then(
+                    d.data.record.getSuccessors().then(
                         {
                             success: succs => {
                                 //Draw a circle on the end of the first one and make it flash if we can't find the end one
                                 _.each(succs, succ => {
-                                    let e = this._findTreeNode(this._getNodeTreeRecordId(succ));
+                                    let e = this._findTreeNode(this._getNodeTreeRecordId(succ.data));
                                     let zClass = 'dependency-item';
                                     let r = 3;
                                     let x0;
@@ -1104,7 +1131,7 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
                                                 .on('click', (a, idx, arr) => { this._createDepsPopover(e, arr[idx]); })    //Default to successors
                                                 .attr('class', zClass + ' dependency-circle');
 
-                                            zClass += (zClass.length ? ' ' : '') + 'dashed' + d.data.record.PortfolioItemType.Ordinal.toString();
+                                            zClass += (zClass.length ? ' ' : '') + 'dep-path dashed' + d.data.record.PortfolioItemType.Ordinal.toString();
 
                                             if (x0) {
                                                 zoomTree.append('path')
@@ -1704,30 +1731,6 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
         return noErrorCls;
     },
 
-    _getSuccessors(record) {
-        let deferred = Ext.create('Deft.Deferred');
-
-        Ext.Ajax.request({
-            url: `${record.Successors._ref}?fetch=${this.STORE_FETCH_FIELD_LIST.join(',')}`,
-            success(response) {
-                if (response && response.responseText) {
-                    let obj = Ext.JSON.decode(response.responseText);
-                    // debugger;
-                    if (obj && obj.QueryResult && obj.QueryResult.Results) {
-                        deferred.resolve(obj.QueryResult.Results);
-                    }
-                    else {
-                        deferred.resolve([]);
-                    }
-                } else {
-                    deferred.resolve([]);
-                }
-            }
-        });
-
-        return deferred.promise;
-    },
-
     _nodePopup(node) {
         Ext.create('Rally.ui.popover.DependenciesPopover',
             {
@@ -2159,7 +2162,11 @@ Ext.define('CustomAgile.apps.PortfolioItemTimeline.app', {
             if (r.id && r.id === 'root') {
                 return { 'Name': r.id, 'record': r, 'dependencies': [] };
             }
-            return { 'Name': r.get('FormattedID'), 'record': r.getData(), 'dependencies': [] };
+            let record = { 'Name': r.get('FormattedID'), 'record': r.getData(), 'dependencies': [] };
+            record.record.getSuccessors = () => {
+                return r.getCollection('Successors', { fetch: this.STORE_FETCH_FIELD_LIST.join(',') }).load();
+            }
+            return record;
         });
 
         if (this._nodes.length > 1) {
